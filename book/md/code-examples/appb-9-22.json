@@ -1,0 +1,47 @@
+{
+  "security": {
+    "sandboxEnabled": true,
+
+    // Command whitelist
+    "allowedCommands": [
+      "git",
+      "npm",
+      "yarn",
+      "kubectl",
+      "docker"
+    ],
+
+    // Path restrictions
+    "allowedPaths": [
+      "~/projects",
+      "/tmp",
+      "/var/tmp"
+    ],
+    "deniedPaths": [
+      "~/.ssh",
+      "~/.aws",
+      "~/.kube/config",
+      "/etc/passwd"
+    ],
+
+    // File size limits
+    "maxFileSize": 10485760,         // 10 MB
+    "maxTotalSize": 104857600,       // 100 MB
+
+    // Rate limiting
+    "rateLimit": {
+      "enabled": true,
+      "requestsPerMinute": 60,
+      "requestsPerHour": 1000,
+      "requestsPerDay": 10000,
+      "bypassTokens": ["${BYPASS_TOKEN}"]
+    },
+
+    // Credential encryption
+    "encryption": {
+      "algorithm": "aes-256-gcm",
+      "keyDerivation": "pbkdf2",
+      "iterations": 100000
+    }
+  }
+}

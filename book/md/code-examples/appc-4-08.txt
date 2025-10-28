@@ -1,0 +1,1 @@
+Error: command not found: kubectl

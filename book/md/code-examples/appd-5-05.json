@@ -1,0 +1,5 @@
+{
+  "tools": {
+    "maxConcurrency": 5  // For 12-core CPU
+  }
+}

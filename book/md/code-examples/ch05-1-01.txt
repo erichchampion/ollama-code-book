@@ -1,0 +1,4 @@
+User: "Analyze this codebase and create a refactoring plan"
+[30 seconds of silence - user sees nothing]
+[Suddenly, entire response appears at once]
+AI: "Here's my analysis..." [5000 words]

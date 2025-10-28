@@ -1,0 +1,5 @@
+0s:   User sends request
+0.1s: First tokens appear: "Here's a REST API..."
+0.2s: More tokens: "for user management..."
+0.5s: Continues streaming...
+10s:  Final tokens complete

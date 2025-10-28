@@ -1,0 +1,13 @@
+User Input
+    ↓
+Input Validation (detect injection, sensitive data)
+    ↓
+Privacy Filter (redact secrets)
+    ↓
+Authorization (check permissions)
+    ↓
+Rate Limiting (check quotas)
+    ↓
+Sandboxed Execution (restricted environment)
+    ↓
+Audit Logging (record everything)

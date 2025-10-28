@@ -1,0 +1,1 @@
+1000 requests/day × 30 days × 5.7 KB = 171 MB/month

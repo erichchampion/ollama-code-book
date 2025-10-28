@@ -1,0 +1,7 @@
+fix(auth): resolve race condition in token refresh
+
+- Add mutex lock to prevent concurrent token refreshes
+- Update token expiration check to use UTC timestamps
+- Add integration test for concurrent refresh scenarios
+
+Fixes #234

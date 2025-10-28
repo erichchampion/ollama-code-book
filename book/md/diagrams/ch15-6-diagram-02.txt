@@ -1,0 +1,7 @@
+Enterprise Package:
+├─ Self-hosted deployment
+├─ Custom model training
+├─ Priority support (SLA)
+├─ Custom plugin development
+├─ On-premise installation
+└─ Price: $5,000-20,000/year

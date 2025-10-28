@@ -1,0 +1,5 @@
+User: "What files are in the src/ directory?"
+AI: "Found 47 TypeScript files: index.ts, router.ts, logger.ts..."
+
+User: "Show me the router file"
+AI: ??? [Without context, AI doesn't know which file]

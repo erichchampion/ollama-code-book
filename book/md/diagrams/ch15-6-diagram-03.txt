@@ -1,0 +1,10 @@
+Open Source (MIT):
+├─ Core framework
+├─ Basic plugins
+└─ CLI tool
+
+Paid Add-ons:
+├─ Advanced plugins ($49-99/plugin)
+├─ Cloud sync
+├─ Team collaboration
+└─ Advanced AI models

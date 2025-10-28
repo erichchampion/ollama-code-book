@@ -1,0 +1,5 @@
+User: "Delete old database backups"
+AI: [Executes: rm -rf /backups/*]
+Result: ❌ All backups deleted including production
+        ❌ No audit trail
+        ❌ No approval required

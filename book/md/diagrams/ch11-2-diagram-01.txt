@@ -1,0 +1,24 @@
+┌─────────────────────────────────────────────────────────────┐
+│              Performance Optimization Strategy               │
+└─────────────────────────────────────────────────────────────┘
+
+1. Measure First
+   └─ Profile actual performance
+   └─ Identify real bottlenecks
+   └─ Set measurable targets
+
+2. Low-Hanging Fruit
+   └─ Add caching (biggest impact)
+   └─ Parallelize independent operations
+   └─ Reduce payload sizes
+
+3. Advanced Optimizations
+   └─ Lazy loading
+   └─ Connection pooling
+   └─ Memory optimization
+   └─ Streaming
+
+4. Validate
+   └─ Measure improvements
+   └─ Monitor in production
+   └─ Iterate

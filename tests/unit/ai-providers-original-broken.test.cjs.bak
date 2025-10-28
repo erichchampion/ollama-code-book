@@ -1,0 +1,559 @@
+/**
+ * Unit Tests for AI Providers
+ *
+ * Tests the multi-provider AI integration system including base provider interface,
+ * specific provider implementations, and intelligent routing capabilities.
+ */
+
+const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
+
+// Mock fetch globally
+global.fetch = jest.fn();
+
+describe('AI Providers System', () => {
+  let mockOllamaProvider, mockOpenAIProvider, mockAnthropicProvider, intelligentRouter;
+
+  beforeEach(async () => {
+    // Reset all mocks
+    jest.clearAllMocks();
+
+    // Import modules dynamically from the compiled dist directory
+    const { OllamaProvider } = await import('../../dist/src/ai/providers/ollama-provider.js');
+    const { OpenAIProvider } = await import('../../dist/src/ai/providers/openai-provider.js');
+    const { AnthropicProvider } = await import('../../dist/src/ai/providers/anthropic-provider.js');
+    const { IntelligentAIRouter } = await import('../../dist/src/ai/providers/intelligent-router.js');
+
+    // Create provider instances with mock configurations
+    mockOllamaProvider = new OllamaProvider({
+      name: 'test-ollama',
+      baseUrl: 'http://localhost:11434',
+      timeout: 5000
+    });
+
+    mockOpenAIProvider = new OpenAIProvider({
+      name: 'test-openai',
+      apiKey: 'test-key-openai',
+      baseUrl: 'https://api.openai.com/v1',
+      timeout: 10000
+    });
+
+    mockAnthropicProvider = new AnthropicProvider({
+      name: 'test-anthropic',
+      apiKey: 'test-key-anthropic',
+      baseUrl: 'https://api.anthropic.com',
+      timeout: 15000
+    });
+
+    intelligentRouter = new IntelligentAIRouter({
+      defaultStrategy: 'capability',
+      fallbackEnabled: true,
+      circuitBreakerThreshold: 3
+    });
+  });
+
+  afterEach(async () => {
+    // Cleanup resources
+    if (intelligentRouter) {
+      await intelligentRouter.cleanup();
+    }
+    jest.clearAllMocks();
+  });
+
+  describe('Base Provider Interface', () => {
+    test('providers should implement required methods', () => {
+      const providers = [mockOllamaProvider, mockOpenAIProvider, mockAnthropicProvider];
+
+      providers.forEach(provider => {
+        expect(typeof provider.getName).toBe('function');
+        expect(typeof provider.getCapabilities).toBe('function');
+        expect(typeof provider.initialize).toBe('function');
+        expect(typeof provider.testConnection).toBe('function');
+        expect(typeof provider.complete).toBe('function');
+        expect(typeof provider.completeStream).toBe('function');
+        expect(typeof provider.listModels).toBe('function');
+        expect(typeof provider.getModel).toBe('function');
+        expect(typeof provider.calculateCost).toBe('function');
+      });
+    });
+
+    test('providers should have correct names', () => {
+      expect(mockOllamaProvider.getName()).toBe('Ollama');
+      expect(mockOpenAIProvider.getName()).toBe('OpenAI');
+      expect(mockAnthropicProvider.getName()).toBe('Anthropic');
+    });
+
+    test('providers should return capabilities', () => {
+      const ollamaCapabilities = mockOllamaProvider.getCapabilities();
+      const openaiCapabilities = mockOpenAIProvider.getCapabilities();
+      const anthropicCapabilities = mockAnthropicProvider.getCapabilities();
+
+      expect(ollamaCapabilities).toHaveProperty('maxContextWindow');
+      expect(ollamaCapabilities).toHaveProperty('supportedCapabilities');
+      expect(ollamaCapabilities).toHaveProperty('rateLimits');
+      expect(ollamaCapabilities).toHaveProperty('features');
+
+      expect(openaiCapabilities.features.functionCalling).toBe(true);
+      expect(anthropicCapabilities.features.documentInput).toBe(true);
+    });
+
+    test('providers should track health and metrics', () => {
+      const providers = [mockOllamaProvider, mockOpenAIProvider, mockAnthropicProvider];
+
+      providers.forEach(provider => {
+        const health = provider.getHealth();
+        const metrics = provider.getMetrics();
+
+        expect(health).toHaveProperty('status');
+        expect(health).toHaveProperty('lastCheck');
+        expect(health).toHaveProperty('responseTime');
+
+        expect(metrics).toHaveProperty('totalRequests');
+        expect(metrics).toHaveProperty('successfulRequests');
+        expect(metrics).toHaveProperty('averageResponseTime');
+      });
+    });
+  });
+
+  describe('Ollama Provider', () => {
+    test('should handle successful completion request', async () => {
+      // Mock successful Ollama response
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          model: 'llama3.2:latest',
+          created_at: '2024-01-01T00:00:00Z',
+          message: {
+            role: 'assistant',
+            content: 'Hello! How can I help you today?'
+          },
+          done: true,
+          prompt_eval_count: 10,
+          eval_count: 15,
+          total_duration: 1000000000
+        })
+      });
+
+      const response = await mockOllamaProvider.complete('Hello');
+
+      expect(response).toHaveProperty('content', 'Hello! How can I help you today?');
+      expect(response).toHaveProperty('model', 'llama3.2:latest');
+      expect(response).toHaveProperty('finishReason', 'stop');
+      expect(response.usage.promptTokens).toBe(10);
+      expect(response.usage.completionTokens).toBe(15);
+      expect(response.metadata.provider).toBe('ollama');
+    });
+
+    test('should handle model listing', async () => {
+      // Mock Ollama models response
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          models: [
+            {
+              name: 'llama3.2:latest',
+              modified_at: '2024-01-01T00:00:00Z',
+              size: 4000000000,
+              digest: 'sha256:abc123'
+            },
+            {
+              name: 'qwen2.5-coder:latest',
+              modified_at: '2024-01-01T00:00:00Z',
+              size: 7000000000,
+              digest: 'sha256:def456'
+            }
+          ]
+        })
+      });
+
+      const models = await mockOllamaProvider.listModels();
+
+      expect(models).toHaveLength(2);
+      expect(models[0]).toHaveProperty('id', 'llama3.2:latest');
+      expect(models[0]).toHaveProperty('provider', 'ollama');
+      expect(models[0]).toHaveProperty('capabilities');
+      expect(models[0].costPerToken.input).toBe(0); // Ollama is free
+    });
+
+    test('should calculate zero cost', () => {
+      const cost = mockOllamaProvider.calculateCost(1000, 500);
+      expect(cost).toBe(0);
+    });
+  });
+
+  describe('OpenAI Provider', () => {
+    test('should handle successful completion request', async () => {
+      // Mock successful OpenAI response
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'chatcmpl-123',
+          object: 'chat.completion',
+          created: 1677652288,
+          model: 'gpt-4-turbo-preview',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Hello! I can help you with coding tasks.'
+            },
+            finish_reason: 'stop'
+          }],
+          usage: {
+            prompt_tokens: 12,
+            completion_tokens: 18,
+            total_tokens: 30
+          }
+        })
+      });
+
+      const response = await mockOpenAIProvider.complete('Hello');
+
+      expect(response).toHaveProperty('content', 'Hello! I can help you with coding tasks.');
+      expect(response).toHaveProperty('model', 'gpt-4-turbo-preview');
+      expect(response).toHaveProperty('finishReason', 'stop');
+      expect(response.usage.promptTokens).toBe(12);
+      expect(response.usage.completionTokens).toBe(18);
+      expect(response.metadata.provider).toBe('openai');
+    });
+
+    test('should handle authentication error', async () => {
+      // Mock authentication error
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({
+          error: {
+            message: 'Invalid API key',
+            type: 'invalid_request_error'
+          }
+        })
+      });
+
+      await expect(mockOpenAIProvider.complete('Hello')).rejects.toThrow();
+    });
+
+    test('should calculate correct costs', () => {
+      const cost = mockOpenAIProvider.calculateCost(1000, 500, 'gpt-4-turbo-preview');
+      expect(cost).toBeGreaterThan(0);
+      expect(typeof cost).toBe('number');
+    });
+  });
+
+  describe('Anthropic Provider', () => {
+    test('should handle successful completion request', async () => {
+      // Mock successful Anthropic response
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'msg_123',
+          type: 'message',
+          role: 'assistant',
+          content: [{
+            type: 'text',
+            text: 'Hello! I\'m Claude, and I\'d be happy to help you with your coding questions.'
+          }],
+          model: 'claude-3-sonnet-20240229',
+          stop_reason: 'end_turn',
+          usage: {
+            input_tokens: 15,
+            output_tokens: 25
+          }
+        })
+      });
+
+      const response = await mockAnthropicProvider.complete('Hello');
+
+      expect(response).toHaveProperty('content', 'Hello! I\'m Claude, and I\'d be happy to help you with your coding questions.');
+      expect(response).toHaveProperty('model', 'claude-3-sonnet-20240229');
+      expect(response).toHaveProperty('finishReason', 'stop');
+      expect(response.usage.promptTokens).toBe(15);
+      expect(response.usage.completionTokens).toBe(25);
+      expect(response.metadata.provider).toBe('anthropic');
+    });
+
+    test('should handle system messages correctly', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'msg_123',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Response with system context.' }],
+          model: 'claude-3-sonnet-20240229',
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 20, output_tokens: 10 }
+        })
+      });
+
+      const messages = [
+        { role: 'system', content: 'You are a helpful coding assistant.' },
+        { role: 'user', content: 'Hello' }
+      ];
+
+      const response = await mockAnthropicProvider.complete(messages);
+      expect(response.content).toBe('Response with system context.');
+    });
+
+    test('should return known models', async () => {
+      const models = await mockAnthropicProvider.listModels();
+
+      expect(models.length).toBeGreaterThan(0);
+      expect(models[0]).toHaveProperty('provider', 'anthropic');
+      expect(models.some(model => model.id.includes('claude-3'))).toBe(true);
+    });
+  });
+
+  describe('Intelligent Router', () => {
+    beforeEach(async () => {
+      // Mock provider initialization for router tests
+      jest.spyOn(mockOllamaProvider, 'initialize').mockResolvedValue();
+      jest.spyOn(mockOllamaProvider, 'isReady').mockReturnValue(true);
+      jest.spyOn(mockOpenAIProvider, 'initialize').mockResolvedValue();
+      jest.spyOn(mockOpenAIProvider, 'isReady').mockReturnValue(true);
+      jest.spyOn(mockAnthropicProvider, 'initialize').mockResolvedValue();
+      jest.spyOn(mockAnthropicProvider, 'isReady').mockReturnValue(true);
+
+      // Register providers with router
+      await intelligentRouter.registerProvider(mockOllamaProvider);
+      await intelligentRouter.registerProvider(mockOpenAIProvider);
+      await intelligentRouter.registerProvider(mockAnthropicProvider);
+    });
+
+    test('should register providers successfully', () => {
+      const providerStatus = intelligentRouter.getProviderStatus();
+
+      expect(providerStatus).toHaveProperty('ollama');
+      expect(providerStatus).toHaveProperty('openai');
+      expect(providerStatus).toHaveProperty('anthropic');
+
+      expect(providerStatus.ollama.isReady).toBe(true);
+      expect(providerStatus.openai.isReady).toBe(true);
+      expect(providerStatus.anthropic.isReady).toBe(true);
+    });
+
+    test('should route requests based on capabilities', async () => {
+      // Mock successful completion
+      jest.spyOn(mockOpenAIProvider, 'complete').mockResolvedValue({
+        content: 'Routed response',
+        model: 'gpt-4',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        metadata: { requestId: 'test', processingTime: 100, provider: 'openai' }
+      });
+
+      const response = await intelligentRouter.route(
+        'Hello',
+        { model: 'gpt-4' },
+        {
+          requiredCapabilities: ['function_calling'],
+          requestType: 'completion'
+        }
+      );
+
+      expect(response.content).toBe('Routed response');
+      expect(mockOpenAIProvider.complete).toHaveBeenCalled();
+    });
+
+    test('should handle provider fallback', async () => {
+      // Mock primary provider failure and secondary success
+      jest.spyOn(mockOpenAIProvider, 'complete').mockRejectedValue(new Error('Primary failed'));
+      jest.spyOn(mockAnthropicProvider, 'complete').mockResolvedValue({
+        content: 'Fallback response',
+        model: 'claude-3-sonnet',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        metadata: { requestId: 'test', processingTime: 200, provider: 'anthropic' }
+      });
+
+      const response = await intelligentRouter.route('Hello', {}, {
+        requiredCapabilities: ['reasoning'],
+        requestType: 'completion'
+      });
+
+      expect(response.content).toBe('Fallback response');
+      expect(mockAnthropicProvider.complete).toHaveBeenCalled();
+    });
+
+    test('should track routing metrics', async () => {
+      jest.spyOn(mockOllamaProvider, 'complete').mockResolvedValue({
+        content: 'Test response',
+        model: 'llama3.2',
+        finishReason: 'stop',
+        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        metadata: { requestId: 'test', processingTime: 50, provider: 'ollama' }
+      });
+
+      await intelligentRouter.route('Test query', {}, { requestType: 'completion' });
+
+      const metrics = intelligentRouter.getMetrics();
+      expect(metrics.totalRequests).toBe(1);
+      expect(metrics.successfulRoutings).toBe(1);
+      expect(metrics.averageDecisionTime).toBeGreaterThan(0);
+    });
+
+    test('should get best provider for capabilities', async () => {
+      const bestProvider = await intelligentRouter.getBestProvider({
+        requiredCapabilities: ['function_calling'],
+        requestType: 'completion'
+      });
+
+      expect(bestProvider).toBe(mockOpenAIProvider);
+    });
+
+    test('should list all models across providers', async () => {
+      // Mock model responses
+      jest.spyOn(mockOllamaProvider, 'listModels').mockResolvedValue([
+        { id: 'llama3.2', name: 'Llama 3.2', provider: 'ollama', capabilities: [], contextWindow: 8192, costPerToken: { input: 0, output: 0 }, averageResponseTime: 0, qualityScore: 85, lastUpdated: new Date() }
+      ]);
+      jest.spyOn(mockOpenAIProvider, 'listModels').mockResolvedValue([
+        { id: 'gpt-4', name: 'GPT-4', provider: 'openai', capabilities: [], contextWindow: 8192, costPerToken: { input: 0.03, output: 0.06 }, averageResponseTime: 0, qualityScore: 95, lastUpdated: new Date() }
+      ]);
+      jest.spyOn(mockAnthropicProvider, 'listModels').mockResolvedValue([
+        { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'anthropic', capabilities: [], contextWindow: 200000, costPerToken: { input: 0.003, output: 0.015 }, averageResponseTime: 0, qualityScore: 92, lastUpdated: new Date() }
+      ]);
+
+      const allModels = await intelligentRouter.getAllModels();
+
+      expect(allModels.length).toBe(3);
+      expect(allModels.some(model => model.provider === 'ollama')).toBe(true);
+      expect(allModels.some(model => model.provider === 'openai')).toBe(true);
+      expect(allModels.some(model => model.provider === 'anthropic')).toBe(true);
+    });
+  });
+
+  describe('Provider Factory', () => {
+    test('should create providers using factory function', async () => {
+      const { createProvider, getAvailableProviderTypes, validateProviderConfig } =
+        await import('../../src/ai/providers/index.js');
+
+      // Test available provider types
+      const types = getAvailableProviderTypes();
+      expect(types).toContain('ollama');
+      expect(types).toContain('openai');
+      expect(types).toContain('anthropic');
+
+      // Test provider creation
+      const ollamaProvider = createProvider('ollama', {
+        name: 'test-ollama',
+        baseUrl: 'http://localhost:11434'
+      });
+      expect(ollamaProvider.getName()).toBe('Ollama');
+
+      // Test configuration validation
+      expect(validateProviderConfig('ollama', { name: 'test', baseUrl: 'http://localhost:11434' })).toBe(true);
+      expect(validateProviderConfig('ollama', { name: 'test' })).toBe(false);
+      expect(validateProviderConfig('invalid', { name: 'test' })).toBe(false);
+    });
+
+    test('should throw error for unknown provider type', async () => {
+      const { createProvider } = await import('../../src/ai/providers/index.js');
+
+      expect(() => {
+        createProvider('unknown', { name: 'test' });
+      }).toThrow('Unknown provider type: unknown');
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should handle provider errors correctly', async () => {
+      const { ProviderError, ProviderRateLimitError, ProviderAuthenticationError } =
+        await import('../../src/ai/providers/base-provider.js');
+
+      const providerError = new ProviderError('Test error', 'test-provider', 'TEST_ERROR', true);
+      expect(providerError.provider).toBe('test-provider');
+      expect(providerError.retryable).toBe(true);
+
+      const rateLimitError = new ProviderRateLimitError('test-provider');
+      expect(rateLimitError.name).toBe('ProviderRateLimitError');
+      expect(rateLimitError.retryable).toBe(true);
+
+      const authError = new ProviderAuthenticationError('test-provider');
+      expect(authError.name).toBe('ProviderAuthenticationError');
+      expect(authError.retryable).toBe(false);
+    });
+  });
+
+  describe('Circuit Breaker', () => {
+    test('should open circuit breaker after failures', async () => {
+      // Simulate provider failures
+      jest.spyOn(mockOllamaProvider, 'complete').mockRejectedValue(new Error('Connection failed'));
+
+      // Try multiple requests to trigger circuit breaker
+      for (let i = 0; i < 5; i++) {
+        try {
+          await intelligentRouter.route('Test', {}, { requestType: 'completion' });
+        } catch (error) {
+          // Expected to fail
+        }
+      }
+
+      const providerStatus = intelligentRouter.getProviderStatus();
+      // Circuit breaker behavior would be reflected in the status
+      expect(providerStatus.ollama).toBeDefined();
+    });
+  });
+
+  describe('Streaming Support', () => {
+    test('should handle streaming requests', async () => {
+      const streamEvents = [];
+      const mockOnEvent = jest.fn((event) => {
+        streamEvents.push(event);
+      });
+
+      // Mock streaming response
+      jest.spyOn(mockOllamaProvider, 'completeStream').mockImplementation(async (prompt, options, onEvent) => {
+        onEvent({ content: 'Hello', done: false, delta: 'Hello', metadata: { provider: 'ollama' } });
+        onEvent({ content: ' world', done: false, delta: ' world', metadata: { provider: 'ollama' } });
+        onEvent({ content: '', done: true, delta: '', metadata: { provider: 'ollama' } });
+      });
+
+      await intelligentRouter.routeStream(
+        'Hello',
+        { stream: true },
+        mockOnEvent,
+        { requiredCapabilities: ['streaming'], requestType: 'streaming' }
+      );
+
+      expect(mockOnEvent).toHaveBeenCalledTimes(3);
+      expect(mockOnEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'Hello', done: false })
+      );
+    });
+  });
+});
+
+describe('Integration Tests', () => {
+  test('should work end-to-end with mocked responses', async () => {
+    // This test demonstrates how the complete system works together
+    const { IntelligentAIRouter, OllamaProvider } = await import('../../src/ai/providers/index.js');
+
+    const provider = new OllamaProvider({
+      name: 'integration-test',
+      baseUrl: 'http://localhost:11434'
+    });
+
+    const router = new IntelligentAIRouter({
+      defaultStrategy: 'performance'
+    });
+
+    // Mock successful initialization and request
+    jest.spyOn(provider, 'initialize').mockResolvedValue();
+    jest.spyOn(provider, 'isReady').mockReturnValue(true);
+    jest.spyOn(provider, 'complete').mockResolvedValue({
+      content: 'Integration test response',
+      model: 'test-model',
+      finishReason: 'stop',
+      usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+      metadata: { requestId: 'test', processingTime: 100, provider: 'ollama' }
+    });
+
+    await router.registerProvider(provider);
+
+    const response = await router.route('Test integration', {}, { requestType: 'completion' });
+
+    expect(response.content).toBe('Integration test response');
+    expect(response.metadata.provider).toBe('ollama');
+
+    await router.cleanup();
+  });
+});

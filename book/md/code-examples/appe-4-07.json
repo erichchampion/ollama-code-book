@@ -1,0 +1,26 @@
+{
+  "security": {
+    "sandbox": {
+      "enabled": true,
+      "filesystem": {
+        "allowedPaths": [
+          "~/projects",
+          "/tmp"
+        ],
+        "deniedPaths": [
+          "~/.ssh",
+          "~/.aws",
+          "~/.kube",
+          "/etc/passwd",
+          "/etc/shadow"
+        ],
+        "readOnly": [
+          "/usr/bin",
+          "/usr/lib"
+        ],
+        "maxFileSize": 10485760,
+        "maxTotalSize": 104857600
+      }
+    }
+  }
+}

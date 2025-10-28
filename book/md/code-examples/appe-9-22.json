@@ -1,0 +1,14 @@
+{
+  "privacy": {
+    "retention": {
+      "conversations": "30d",
+      "logs": "90d",
+      "auditLogs": "365d",
+      "cache": "7d"
+    },
+    "deletion": {
+      "autoDelete": true,
+      "deleteOnRequest": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+Developer workflow WITH IDE integration:
+
+1. Write code in VS Code
+2. Encounter error
+3. Click Quick Fix (Cmd+.)
+4. AI suggests fix inline
+5. Apply with one click
+6. Continue coding
+
+Time per iteration: 10-30 seconds
+Context switches: 0
+Flow state: Preserved

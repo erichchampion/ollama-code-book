@@ -1,0 +1,33 @@
+{
+  "tools": {
+    "config": {
+      // File system tools
+      "filesystem": {
+        "maxFileSize": 10485760,     // 10 MB
+        "allowedExtensions": [".ts", ".js", ".json", ".md"],
+        "encoding": "utf-8"
+      },
+
+      // Git tools
+      "git": {
+        "autoStage": false,
+        "signCommits": true,
+        "gpgKey": "${GPG_KEY_ID}"
+      },
+
+      // Code analysis tools
+      "codeAnalysis": {
+        "linter": "eslint",
+        "formatter": "prettier",
+        "typeChecker": "tsc"
+      },
+
+      // Network tools
+      "network": {
+        "allowedDomains": ["github.com", "npmjs.com"],
+        "timeout": 10000,
+        "maxResponseSize": 5242880  // 5 MB
+      }
+    }
+  }
+}

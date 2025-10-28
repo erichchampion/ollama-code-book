@@ -1,0 +1,38 @@
+{
+  "id": "basic-file-list",
+  "description": "User asks what files are in the project - should call filesystem list without infinite loop",
+  "turns": [
+    {
+      "userMessage": "What files are in this project?",
+      "aiResponse": {
+        "content": "{\"name\":\"filesystem\",\"arguments\":{\"operation\":\"list\",\"path\":\".\"}}",
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "filesystem",
+              "arguments": "{\"operation\":\"list\",\"path\":\".\"}"
+            }
+          }
+        ]
+      },
+      "expectedToolCalls": [
+        {
+          "name": "filesystem",
+          "arguments": {
+            "operation": "list",
+            "path": "."
+          }
+        }
+      ],
+      "toolResults": [
+        {
+          "tool_name": "filesystem",
+          "content": "Files in current directory:\n- README.md\n- index.js\n- math.js\n- validation.js\n- package.json"
+        }
+      ],
+      "finalResponse": "Here are the files in your project:\n\n- README.md\n- index.js (appears to be the main entry point)\n- math.js (contains math utilities)\n- validation.js (contains input validation)\n- package.json (project configuration)\n\nThe project structure suggests this is a small JavaScript application with modular code organization."
+    }
+  ]
+}

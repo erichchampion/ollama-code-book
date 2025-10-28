@@ -1,0 +1,3 @@
+0s:  User sends request
+     [10 seconds of silence]
+10s: Entire response appears

@@ -1,0 +1,5 @@
+$ myapp --help
+$ myapp commit --help
+$ myapp commit --message "fix bug" --files src/auth/
+Time: 5-10 minutes (reading docs, constructing command)
+Success rate: 60% (syntax errors)

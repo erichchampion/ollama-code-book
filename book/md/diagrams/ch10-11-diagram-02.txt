@@ -1,0 +1,17 @@
+Unit Tests (Fast, Many)
+├─ Pure functions
+├─ Validation logic
+├─ Data transformations
+└─ No AI dependencies
+
+Integration Tests (Medium Speed, Some)
+├─ Mock AI providers
+├─ Component integration
+├─ Tool orchestration
+└─ Conversation flow
+
+E2E Tests (Slow, Few)
+├─ Real AI providers
+├─ Full workflows
+├─ Regression detection
+└─ Quality validation

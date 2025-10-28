@@ -1,0 +1,37 @@
+{
+  "security": {
+    "audit": {
+      "enabled": true,
+      "events": [
+        "auth:login",
+        "auth:logout",
+        "auth:failed",
+        "api:key_used",
+        "file:read",
+        "file:write",
+        "command:execute",
+        "config:change",
+        "security:rate_limit",
+        "security:validation_failed"
+      ],
+      "storage": {
+        "type": "file",
+        "path": "~/.ollama-code/logs/audit.log",
+        "rotation": {
+          "maxSize": "50m",
+          "maxFiles": 10,
+          "compress": true
+        }
+      },
+      "sanitization": {
+        "enabled": true,
+        "redactPatterns": [
+          "sk-[a-zA-Z0-9]+",
+          "Bearer [a-zA-Z0-9]+",
+          "password.*",
+          "api[_-]?key.*"
+        ]
+      }
+    }
+  }
+}

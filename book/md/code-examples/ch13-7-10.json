@@ -1,0 +1,12 @@
+{
+  "name": "@ollama-code/plugin-docker",
+  "version": "1.0.0",
+  "description": "Docker plugin for Ollama Code",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "ollamaCodePlugin": true,
+  "keywords": ["ollama-code-plugin", "docker", "containers"],
+  "peerDependencies": {
+    "@ollama-code/core": "^1.0.0"
+  }
+}

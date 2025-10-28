@@ -1,0 +1,1 @@
+Create three files: alpha.txt with content "Alpha", beta.txt with content "Beta", and gamma.txt with content "Gamma"

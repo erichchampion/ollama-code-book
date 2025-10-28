@@ -1,0 +1,5 @@
+gpt-3.5-turbo      - 16K context
+gpt-4              - 8K context
+gpt-4-32k          - 32K context
+gpt-4-turbo        - 128K context
+gpt-4-vision       - 128K context (supports images)

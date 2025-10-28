@@ -1,0 +1,15 @@
+{
+  "security": {
+    "rateLimit": {
+      "enabled": true,
+      "limits": {
+        "perMinute": 60,
+        "perHour": 1000,
+        "perDay": 10000
+      },
+      "bypassTokens": [],
+      "actionOnExceeded": "reject",
+      "retryAfter": 60
+    }
+  }
+}

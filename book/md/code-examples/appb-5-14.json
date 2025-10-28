@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "anthropic": {
+      // Required
+      "apiKey": "${ANTHROPIC_API_KEY}",
+      "model": "claude-3-sonnet-20240229",
+
+      // Optional
+      "maxTokens": 4096,
+      "timeout": 30000,
+
+      // Model-specific options
+      "defaultOptions": {
+        "temperature": 0.7,
+        "top_p": 1.0,
+        "top_k": -1
+      }
+    }
+  }
+}

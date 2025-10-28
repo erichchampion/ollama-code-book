@@ -1,0 +1,103 @@
+ollama-code/
+├── src/                          # Source code
+│   ├── ai/                       # AI integration layer
+│   │   ├── providers/            # AI provider implementations
+│   │   │   ├── base-provider.ts  # Abstract base class
+│   │   │   ├── ollama-provider.ts
+│   │   │   ├── openai-provider.ts
+│   │   │   ├── anthropic-provider.ts
+│   │   │   ├── google-provider.ts
+│   │   │   ├── intelligent-router.ts
+│   │   │   ├── response-fusion.ts
+│   │   │   └── provider-manager.ts
+│   │   ├── ollama-client.ts      # Ollama-specific client
+│   │   ├── conversation-manager.ts
+│   │   ├── intent-analyzer.ts
+│   │   └── task-planner.ts
+│   │
+│   ├── tools/                    # Tool system
+│   │   ├── types.ts              # Tool interfaces
+│   │   ├── registry.ts           # Tool registry
+│   │   ├── orchestrator.ts       # Tool orchestration
+│   │   ├── streaming-orchestrator.ts
+│   │   ├── filesystem.ts         # Filesystem tool
+│   │   ├── execution.ts          # Command execution tool
+│   │   ├── search.ts             # Code search tool
+│   │   ├── advanced-git-tool.ts  # Git operations
+│   │   ├── advanced-code-analysis-tool.ts
+│   │   └── advanced-testing-tool.ts
+│   │
+│   ├── core/                     # Core infrastructure
+│   │   ├── container.ts          # DI container
+│   │   ├── services.ts           # Service registry
+│   │   └── config.ts             # Configuration
+│   │
+│   ├── commands/                 # CLI commands
+│   │   ├── types.ts              # Command interfaces
+│   │   ├── register.ts           # Command registration
+│   │   ├── generate.ts           # Generate command
+│   │   ├── explain.ts            # Explain command
+│   │   ├── refactor.ts           # Refactor command
+│   │   └── test.ts               # Test command
+│   │
+│   ├── codebase/                 # Codebase analysis
+│   │   ├── project-context.ts    # Project analyzer
+│   │   ├── code-graph.ts         # Dependency graph
+│   │   └── file-index.ts         # File indexing
+│   │
+│   ├── interactive/              # Interactive mode
+│   │   ├── optimized-enhanced-mode.ts
+│   │   ├── component-factory.ts
+│   │   └── streaming-initializer.ts
+│   │
+│   ├── routing/                  # Natural language routing
+│   │   └── nl-router.ts
+│   │
+│   ├── terminal/                 # Terminal I/O
+│   │   ├── index.ts              # Terminal interface
+│   │   └── compatibility-layer.ts
+│   │
+│   ├── utils/                    # Utilities
+│   │   ├── logger.ts             # Logging
+│   │   ├── error-utils.ts        # Error handling
+│   │   ├── approval-prompt.ts    # User approval
+│   │   └── text-utils.ts         # Text utilities
+│   │
+│   ├── constants/                # Constants
+│   │   ├── index.ts
+│   │   └── tool-orchestration.ts
+│   │
+│   ├── errors/                   # Error handling
+│   │   └── formatter.ts
+│   │
+│   └── index.ts                  # Main entry point
+│
+├── tests/                        # Test files
+│   ├── unit/                     # Unit tests
+│   │   ├── tools/
+│   │   ├── ai/
+│   │   └── core/
+│   ├── integration/              # Integration tests
+│   └── e2e/                      # End-to-end tests
+│
+├── docs/                         # Documentation
+│   ├── api/                      # API documentation
+│   ├── guides/                   # User guides
+│   └── architecture/             # Architecture docs
+│
+├── examples/                     # Example usage
+│   └── custom-tool.ts
+│
+├── .github/                      # GitHub config
+│   └── workflows/                # CI/CD workflows
+│
+├── dist/                         # Compiled output
+├── node_modules/                 # Dependencies
+│
+├── package.json                  # Package config
+├── tsconfig.json                 # TypeScript config
+├── vitest.config.ts              # Test config
+├── .eslintrc.json                # ESLint config
+├── .prettierrc                   # Prettier config
+├── .gitignore
+└── README.md

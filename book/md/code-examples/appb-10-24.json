@@ -1,0 +1,36 @@
+{
+  "performance": {
+    // Caching
+    "cacheEnabled": true,
+    "cacheTTL": 300000,              // 5 minutes
+    "maxCacheSize": 1000,
+    "cacheStrategy": "lru",
+
+    // Connection pooling
+    "connectionPooling": true,
+    "maxConnections": 10,
+    "keepAlive": true,
+    "keepAliveMsecs": 1000,
+
+    // Request batching
+    "batching": {
+      "enabled": true,
+      "maxBatchSize": 10,
+      "batchTimeout": 100            // Wait 100ms for batch
+    },
+
+    // Streaming
+    "streaming": {
+      "enabled": true,
+      "bufferSize": 1024,
+      "backpressureThreshold": 0.8
+    },
+
+    // Memory management
+    "memory": {
+      "gcEnabled": true,
+      "gcInterval": 60000,           // Run GC every minute
+      "maxMemory": 1073741824        // 1 GB
+    }
+  }
+}

@@ -1,0 +1,7 @@
+codellama:7b       - 4K context
+codellama:13b      - 4K context
+codellama:34b      - 8K context
+llama2:7b          - 4K context
+llama2:13b         - 4K context
+mistral:7b         - 8K context
+mixtral:8x7b       - 32K context

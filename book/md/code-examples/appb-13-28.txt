@@ -1,0 +1,7 @@
+✓ Configuration is valid
+
+Effective Configuration:
+  Provider: ollama (from: CLI flag)
+  Model: codellama:34b (from: environment variable)
+  Max Tokens: 8000 (from: config file)
+  ...

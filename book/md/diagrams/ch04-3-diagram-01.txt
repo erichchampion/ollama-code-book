@@ -1,0 +1,66 @@
+┌─────────────────────────────────────────────────────────────┐
+│                     AI Coding Assistant                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Conversation Manager                       │
+│  - Receives user request                                     │
+│  - Analyzes intent: "Find TODOs and create issues"           │
+│  - Sends to AI with available tools                          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      AI Provider                             │
+│  - Reasons about the task                                    │
+│  - Decides which tools to use                                │
+│  - Returns tool calls: [search_code, read_file, ...]         │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Tool Orchestrator                          │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 1. Dependency Resolution                             │   │
+│  │    - Build dependency graph                          │   │
+│  │    - Detect circular dependencies                    │   │
+│  │    - Determine execution order                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                              │                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 2. Execution Planning                                │   │
+│  │    - Identify parallel execution opportunities       │   │
+│  │    - Check result cache                              │   │
+│  │    - Request approval for destructive operations     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                              │                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 3. Execution                                         │   │
+│  │    - Execute tools in optimal order                  │   │
+│  │    - Run independent tools in parallel               │   │
+│  │    - Cache results                                   │   │
+│  │    - Handle errors and retries                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                              │                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 4. Result Aggregation                                │   │
+│  │    - Collect all tool results                        │   │
+│  │    - Track metrics (duration, cache hits, etc.)      │   │
+│  │    - Return to AI for next reasoning step            │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Tool Registry                           │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │  File Tools  │  │  Git Tools   │  │ Code Tools   │      │
+│  ├──────────────┤  ├──────────────┤  ├──────────────┤      │
+│  │ read_file    │  │ git_status   │  │ search_code  │      │
+│  │ write_file   │  │ git_diff     │  │ analyze_ast  │      │
+│  │ list_files   │  │ git_commit   │  │ find_refs    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘

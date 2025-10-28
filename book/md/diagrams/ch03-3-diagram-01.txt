@@ -1,0 +1,8 @@
+App
+ ├─ Router
+ │   ├─ ProviderManager
+ │   │   └─ Logger
+ │   └─ Logger (shared)
+ └─ ConversationManager
+     ├─ Router (shared)
+     └─ Logger (shared)

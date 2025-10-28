@@ -1,0 +1,38 @@
+{
+  "id": "search-library-usage",
+  "description": "User asks how firebase is used - should search content not filename, and use exact query",
+  "turns": [
+    {
+      "userMessage": "How is firebase used in this project?",
+      "aiResponse": {
+        "content": "{\"name\":\"search\",\"arguments\":{\"query\":\"firebase\",\"type\":\"content\"}}",
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "search",
+              "arguments": "{\"query\":\"firebase\",\"type\":\"content\"}"
+            }
+          }
+        ]
+      },
+      "expectedToolCalls": [
+        {
+          "name": "search",
+          "arguments": {
+            "query": "firebase",
+            "type": "content"
+          }
+        }
+      ],
+      "toolResults": [
+        {
+          "tool_name": "search",
+          "content": "Found 3 matches:\n\nindex.js:1: import firebase from 'firebase/app';\nindex.js:2: import 'firebase/auth';\nindex.js:15: const app = firebase.initializeApp(config);\n"
+        }
+      ],
+      "finalResponse": "Firebase is used in this project for authentication. Here's what I found:\n\n1. **Import**: The project imports firebase/app and firebase/auth modules\n2. **Initialization**: Firebase is initialized in index.js with a configuration object\n3. **Usage**: It appears to be used for user authentication\n\nThe project is using Firebase's modular SDK to keep the bundle size small by only importing the auth functionality."
+    }
+  ]
+}

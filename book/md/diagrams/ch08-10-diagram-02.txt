@@ -1,0 +1,11 @@
+Natural Language Input
+        ↓
+Intent Classifier (AI-powered, cached)
+        ↓
+Command Router (lazy-loaded)
+        ↓
+Parameter Inference (multi-strategy)
+        ↓
+Workflow Orchestrator (parallel-capable)
+        ↓
+Command Execution

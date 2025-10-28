@@ -1,0 +1,38 @@
+{
+  "conversation": {
+    // Context window
+    "maxTokens": 8000,
+
+    // Context retention strategy
+    "strategy": "recent",  // recent, important, sliding-summary, relevant
+
+    // Strategy-specific settings
+    "strategyConfig": {
+      "recent": {
+        "maxMessages": 10
+      },
+      "important": {
+        "minImportance": 0.7
+      },
+      "slidingSummary": {
+        "summaryInterval": 5,
+        "summaryModel": "gpt-3.5-turbo"
+      },
+      "relevant": {
+        "similarityThreshold": 0.7,
+        "embeddingModel": "text-embedding-3-small"
+      }
+    },
+
+    // Persistence
+    "autoSave": true,
+    "persistPath": "~/.ollama-code/conversations",
+    "saveInterval": 30000,        // Auto-save every 30s
+
+    // System prompt
+    "systemPrompt": "You are a helpful AI coding assistant...",
+
+    // Token estimation
+    "tokenEstimator": "tiktoken"  // tiktoken, approximate
+  }
+}

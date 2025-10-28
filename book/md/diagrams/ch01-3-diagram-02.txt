@@ -1,0 +1,47 @@
+1. User Input
+   │
+   ├─> Command Parser
+   │   └─> Validate & Parse Arguments
+   │
+2. Intent Analysis
+   │
+   ├─> Natural Language Router
+   │   └─> Classify Intent (query/command/task)
+   │
+3. Context Gathering
+   │
+   ├─> Project Context
+   │   ├─> Relevant Files
+   │   ├─> Code Structure
+   │   └─> Recent Changes
+   │
+   ├─> Conversation Manager
+   │   └─> Recent History
+   │
+4. AI Processing
+   │
+   ├─> Provider Router
+   │   └─> Select Best Provider
+   │
+   ├─> Streaming Orchestrator
+   │   ├─> Send Request
+   │   ├─> Stream Tokens
+   │   └─> Handle Tool Calls
+   │
+5. Tool Execution
+   │
+   ├─> Tool Registry
+   │   ├─> Validate Parameters
+   │   ├─> Check Approval
+   │   └─> Execute Tool
+   │
+6. Response Display
+   │
+   ├─> Terminal Interface
+   │   ├─> Format Output
+   │   └─> Show Progress
+   │
+7. State Update
+   │
+   └─> Conversation Manager
+       └─> Persist Turn

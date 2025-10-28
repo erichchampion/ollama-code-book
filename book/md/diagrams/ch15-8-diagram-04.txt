@@ -1,0 +1,24 @@
+Week -4: Pre-Launch
+├─ Build landing page
+├─ Create demo video
+├─ Write blog post announcement
+└─ Reach out to beta users
+
+Week -2: Beta Launch
+├─ Invite 50-100 beta users
+├─ Gather feedback
+├─ Fix critical bugs
+└─ Create documentation
+
+Week 0: Public Launch
+├─ Post on Hacker News
+├─ Post on Reddit (r/devops, r/kubernetes)
+├─ Email tech influencers
+└─ Publish blog post
+
+Week 1-4: Post-Launch
+├─ Respond to feedback
+├─ Ship bug fixes
+├─ Create tutorials
+├─ Engage with community
+└─ Track metrics

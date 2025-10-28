@@ -1,0 +1,16 @@
+{
+  "id": "no-tools-needed",
+  "description": "User asks a general knowledge question - no tools needed",
+  "turns": [
+    {
+      "userMessage": "What is React?",
+      "aiResponse": {
+        "content": "React is a JavaScript library for building user interfaces, particularly single-page applications. It was developed and is maintained by Facebook (now Meta).\n\nKey features:\n- Component-based architecture\n- Virtual DOM for efficient updates\n- Declarative syntax with JSX\n- Unidirectional data flow\n- Rich ecosystem and community\n\nReact is one of the most popular frontend frameworks, alongside Vue and Angular.",
+        "tool_calls": []
+      },
+      "expectedToolCalls": [],
+      "toolResults": [],
+      "finalResponse": ""
+    }
+  ]
+}

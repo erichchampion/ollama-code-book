@@ -1,0 +1,5 @@
+" Vim command to explain selection
+vnoremap <leader>e :!ollama-code explain<CR>
+
+" Fix current file
+nnoremap <leader>f :%!ollama-code fix<CR>

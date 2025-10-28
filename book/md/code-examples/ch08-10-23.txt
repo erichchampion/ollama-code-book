@@ -1,0 +1,4 @@
+$ myapp "commit my auth changes"
+✓ Committed: fix(auth): resolve token refresh race condition
+Time: 5-10 seconds
+Success rate: 95%

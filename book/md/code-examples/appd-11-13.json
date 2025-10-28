@@ -1,0 +1,15 @@
+{
+  "router": "intelligent",
+  "providers": {
+    "ollama": {
+      "model": "codellama:34b",
+      "use_for": ["simple", "cached"]
+    },
+    "openai": {
+      "model": "gpt-4-turbo",
+      "use_for": ["complex", "critical"]
+    }
+  },
+  "cache": "multi-level",
+  "concurrency": 10
+}

@@ -1,0 +1,21 @@
+-- Neovim config (Lua)
+local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+-- Define custom LSP
+configs.ollama_code = {
+  default_config = {
+    cmd = {'node', '/path/to/language-server.js', '--stdio'},
+    filetypes = {'typescript', 'javascript', 'python', 'go'},
+    root_dir = lspconfig.util.root_pattern('.git'),
+    settings = {
+      ollamaCode = {
+        model = 'codellama:7b',
+        apiUrl = 'http://localhost:11434'
+      }
+    }
+  }
+}
+
+-- Activate
+lspconfig.ollama_code.setup{}

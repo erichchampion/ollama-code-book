@@ -1,0 +1,13 @@
+User: "Delete old database backups"
+AI: [Security checks]
+    [Detects destructive operation]
+    ⚠️  This will delete files in /backups/
+    📋 Affected: 147 files (23 GB)
+    🔒 Requires approval
+
+User: [Types 'yes']
+AI: [Sandboxed execution]
+    [Only deletes files older than 90 days]
+    [Logs to audit trail]
+    ✓ Deleted 12 old backups (3.2 GB)
+    ✓ Kept 135 recent backups (19.8 GB)

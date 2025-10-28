@@ -1,0 +1,24 @@
+{
+  "name": "ollama-code-vscode",
+  "displayName": "Ollama Code AI Assistant",
+  "description": "AI coding assistant powered by Ollama Code",
+  "version": "1.0.0",
+  "publisher": "your-publisher-id",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/ollama-code-vscode"
+  },
+  "homepage": "https://github.com/your-username/ollama-code-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/your-username/ollama-code-vscode/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "code-assistant",
+    "ollama",
+    "copilot",
+    "autocomplete"
+  ]
+}

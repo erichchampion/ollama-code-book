@@ -1,0 +1,24 @@
+{
+  "name": "Code Review Workload",
+  "iterations": 100,
+  "concurrency": 5,
+  "requests": [
+    {
+      "type": "completion",
+      "provider": "ollama",
+      "model": "codellama:13b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Review this code: ${FILE_CONTENT}"
+        }
+      ]
+    }
+  ],
+  "metrics": [
+    "latency",
+    "throughput",
+    "cost",
+    "memory"
+  ]
+}

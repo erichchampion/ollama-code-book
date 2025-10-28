@@ -1,0 +1,33 @@
+{
+  "tools": {
+    // Concurrency
+    "maxConcurrency": 5,
+
+    // Timeout (milliseconds)
+    "timeout": 60000,
+
+    // Approval system
+    "approvalRequired": true,
+    "dangerousToolsRequireApproval": true,
+    "autoApprovePatterns": [
+      "read-file:src/**",
+      "list-files:**"
+    ],
+
+    // Cache
+    "cache": {
+      "enabled": true,
+      "ttl": 300000,            // 5 minutes
+      "maxSize": 1000,
+      "strategy": "lru"         // lru, lfu, fifo
+    },
+
+    // Retry
+    "retry": {
+      "enabled": true,
+      "maxRetries": 3,
+      "backoff": "exponential",
+      "initialDelay": 1000
+    }
+  }
+}

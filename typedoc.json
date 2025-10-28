@@ -1,0 +1,88 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Ollama Code API Documentation",
+  "entryPoints": [
+    "src/ai/providers/index.ts",
+    "src/ai/providers/local-fine-tuning.ts",
+    "src/ai/providers/model-deployment-manager.ts",
+    "src/ai/providers/response-fusion.ts",
+    "src/ai/vcs/universal-ci-api.ts",
+    "src/ai/vcs/ci-template-generator.ts",
+    "src/commands/index.ts",
+    "src/utils/configuration-merger.ts",
+    "src/utils/directory-manager.ts",
+    "src/utils/metrics-calculator.ts",
+    "src/config/index.ts",
+    "src/errors/index.ts",
+    "src/fs/index.ts",
+    "src/terminal/index.ts",
+    "src/telemetry/index.ts"
+  ],
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "README.md",
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/test/**",
+    "**/tests/**"
+  ],
+  "categorizeByGroup": true,
+  "groupOrder": [
+    "Classes",
+    "Interfaces",
+    "Type Aliases",
+    "Functions",
+    "Variables",
+    "Enumerations"
+  ],
+  "sort": ["source-order"],
+  "kindSortOrder": [
+    "Document",
+    "Project",
+    "Module",
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Constructor",
+    "Property",
+    "Variable",
+    "Function",
+    "Accessor",
+    "Method",
+    "Parameter",
+    "TypeParameter",
+    "TypeLiteral",
+    "CallSignature",
+    "ConstructorSignature",
+    "IndexSignature",
+    "GetSignature",
+    "SetSignature"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "commentStyle": "jsdoc",
+  "treatWarningsAsErrors": false,
+  "validation": {
+    "notExported": false,
+    "invalidLink": true,
+    "notDocumented": false
+  },
+  "searchInComments": true,
+  "visibilityFilters": {
+    "protected": false,
+    "private": false,
+    "@internal": false
+  },
+  "githubPages": false,
+  "hideGenerator": true,
+  "includeVersion": true,
+  "customCss": null
+}

@@ -1,0 +1,34 @@
+{
+  "ui": {
+    // Theme
+    "theme": "auto",                 // auto, light, dark
+
+    // Colors
+    "colorOutput": true,
+    "colorScheme": {
+      "primary": "#007acc",
+      "success": "#28a745",
+      "warning": "#ffc107",
+      "error": "#dc3545",
+      "info": "#17a2b8"
+    },
+
+    // Progress
+    "progressBars": true,
+    "progressStyle": "bar",          // bar, spinner, dots
+
+    // Confirmations
+    "confirmDestructive": true,
+    "confirmExpensive": true,
+
+    // Output
+    "verbose": false,
+    "quiet": false,
+    "timestamps": false,
+
+    // Formatting
+    "prettyPrint": true,
+    "maxLineLength": 120,
+    "indentSize": 2
+  }
+}

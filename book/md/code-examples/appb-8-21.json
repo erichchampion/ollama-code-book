@@ -1,0 +1,46 @@
+{
+  "plugins": {
+    // Enabled plugins
+    "enabled": ["kubernetes", "docker", "terraform"],
+
+    // Plugin sources
+    "sources": [
+      "npm",
+      "filesystem:~/.ollama-code/plugins",
+      "registry:https://plugins.ollama-code.dev"
+    ],
+
+    // Auto-update
+    "autoUpdate": false,
+    "updateCheckInterval": 86400000,  // 24 hours
+
+    // Sandboxing
+    "sandbox": {
+      "enabled": true,
+      "isolate": true,
+      "resourceLimits": {
+        "maxMemory": 536870912,      // 512 MB
+        "maxCpu": 80                 // 80% CPU
+      }
+    },
+
+    // Per-plugin configuration
+    "config": {
+      "kubernetes": {
+        "kubectl": true,
+        "helm": true,
+        "kustomize": false,
+        "context": "default"
+      },
+      "docker": {
+        "socket": "/var/run/docker.sock",
+        "registry": "docker.io"
+      },
+      "terraform": {
+        "terraform": true,
+        "terragrunt": false,
+        "backend": "local"
+      }
+    }
+  }
+}

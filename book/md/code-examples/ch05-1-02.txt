@@ -1,0 +1,7 @@
+User: "Analyze this codebase and create a refactoring plan"
+[Immediately] "Analyzing codebase structure..."
+[1s] "Found 47 TypeScript files in src/"
+[2s] "Detecting patterns..."
+[3s] "Identified 3 architectural concerns:"
+[4s] "1. Circular dependencies in..."
+[User can start reading while AI continues generating]

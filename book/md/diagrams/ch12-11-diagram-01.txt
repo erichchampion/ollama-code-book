@@ -1,0 +1,14 @@
+Logs (Structured JSON)
+├─ What happened
+├─ Full context
+└─ Searchable
+
+Metrics (Time Series)
+├─ How much/how fast
+├─ Trends over time
+└─ Alerting
+
+Traces (Request Flow)
+├─ Where time spent
+├─ Bottleneck identification
+└─ Error propagation

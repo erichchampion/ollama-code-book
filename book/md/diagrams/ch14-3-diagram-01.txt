@@ -1,0 +1,11 @@
+my-ai-extension/
+├── package.json              # Extension manifest
+├── src/
+│   ├── extension.ts         # Entry point
+│   ├── commands/            # Command handlers
+│   ├── providers/           # IntelliSense, Quick Fixes, etc.
+│   ├── client.ts            # AI client integration
+│   └── utils/
+├── syntaxes/                # Language grammars (optional)
+├── snippets/                # Code snippets (optional)
+└── README.md

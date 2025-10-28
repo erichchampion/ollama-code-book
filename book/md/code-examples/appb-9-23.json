@@ -1,0 +1,22 @@
+{
+  "security": {
+    "audit": {
+      "enabled": true,
+      "logPath": "~/.ollama-code/logs/audit.log",
+      "events": [
+        "auth:login",
+        "auth:logout",
+        "tool:execute",
+        "file:read",
+        "file:write",
+        "command:execute",
+        "config:change"
+      ],
+      "rotation": {
+        "maxSize": "50m",
+        "maxFiles": 10,
+        "compress": true
+      }
+    }
+  }
+}

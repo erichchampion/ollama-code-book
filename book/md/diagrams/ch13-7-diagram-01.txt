@@ -1,0 +1,14 @@
+@ollama-code/plugin-docker/
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── index.ts          # Plugin entry point
+│   ├── tools/            # Docker tools
+│   │   ├── list.ts
+│   │   ├── run.ts
+│   │   ├── stop.ts
+│   │   └── build.ts
+│   └── types.ts          # Type definitions
+├── tests/                # Plugin tests
+│   └── plugin.test.ts
+└── README.md             # Plugin documentation

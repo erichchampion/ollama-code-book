@@ -1,0 +1,27 @@
+{
+  "security": {
+    "sandbox": {
+      "commands": {
+        "whitelist": [
+          "git",
+          "npm",
+          "yarn",
+          "node",
+          "python3"
+        ],
+        "blacklist": [
+          "rm",
+          "dd",
+          "mkfs",
+          "fdisk",
+          "shutdown",
+          "reboot"
+        ],
+        "allowedArgs": {
+          "git": ["status", "log", "diff", "add", "commit"],
+          "npm": ["install", "test", "run"]
+        }
+      }
+    }
+  }
+}

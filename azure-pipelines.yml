@@ -1,0 +1,68 @@
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+pool:
+  vmImage: ubuntu-latest
+variables:
+  MIN_QUALITY_SCORE: '80'
+  MAX_CRITICAL_ISSUES: '0'
+  MAX_SECURITY_ISSUES: '5'
+  MAX_PERFORMANCE_ISSUES: '3'
+  MIN_TEST_COVERAGE: '80'
+  REGRESSION_THRESHOLD: medium
+  ANALYSIS_TIMEOUT: '300'
+stages:
+  - stage: Analysis
+    displayName: Code Analysis
+    jobs:
+      - job: RunAnalysis
+        displayName: Run Ollama Code Analysis
+        steps:
+          - task: NodeTool@0
+            displayName: Install Node.js
+            inputs:
+              versionSpec: 20.x
+          - script: |-
+              echo "📦 Installing dependencies..."
+              yarn install --frozen-lockfile
+            displayName: Install Dependencies
+          - script: |-
+              echo "🔨 Building project..."
+              yarn build
+            displayName: Build Project
+          - script: >-
+              echo "🔍 Running Ollama Code Analysis..."
+
+              node dist/src/ai/vcs/ci-pipeline-integrator.js --platform azure
+              --repository-path . --enable-security true --enable-performance
+              true --enable-architecture true --enable-regression true
+              --min-quality-score 80 --max-critical-issues 0
+              --max-security-issues 5 --max-performance-issues 3
+              --min-test-coverage 80 --regression-threshold medium
+              --report-format json --output-path ./reports
+            displayName: Run Analysis
+          - script: |-
+              if [ -f "reports/ollama-code-report.json" ]; then
+                QUALITY_GATES=$(jq -r '.qualityGatePassed' reports/ollama-code-report.json)
+                QUALITY_SCORE=$(jq -r '.overallScore' reports/ollama-code-report.json)
+                echo "Quality Score: ${QUALITY_SCORE}/100"
+                if [ "$QUALITY_GATES" = "true" ]; then
+                  echo "✅ All quality gates passed"
+                else
+                  echo "❌ Quality gates failed - review required"
+                  exit 1
+                fi
+              else
+                echo "Analysis report not found"
+                exit 1
+              fi
+            displayName: Validate Quality Gates
+          - task: PublishBuildArtifacts@1
+            displayName: Publish Reports
+            inputs:
+              pathToPublish: reports
+              artifactName: analysis-reports
+            condition: always()
+

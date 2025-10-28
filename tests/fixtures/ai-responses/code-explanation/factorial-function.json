@@ -1,0 +1,26 @@
+{
+  "id": "code-explanation-factorial-function",
+  "category": "code-explanation",
+  "prompt": "Explain how this factorial function works:\n\n```javascript\nfunction factorial(n) {\n  if (n <= 1) return 1;\n  return n * factorial(n - 1);\n}\n```",
+  "response": "This is a **recursive factorial function** that calculates the factorial of a number.\n\n**How it works:**\n\n1. **Base Case** (`if (n <= 1) return 1`):\n   - When n is 0 or 1, the function returns 1\n   - This stops the recursion from continuing infinitely\n   - Mathematically: 0! = 1 and 1! = 1\n\n2. **Recursive Case** (`return n * factorial(n - 1)`):\n   - Multiplies the current number (n) by the factorial of (n-1)\n   - Calls itself with a smaller value each time\n   - Continues until reaching the base case\n\n**Example Execution** for `factorial(5)`:\n```\nfactorial(5) = 5 * factorial(4)\n             = 5 * (4 * factorial(3))\n             = 5 * (4 * (3 * factorial(2)))\n             = 5 * (4 * (3 * (2 * factorial(1))))\n             = 5 * (4 * (3 * (2 * 1)))\n             = 5 * 4 * 3 * 2 * 1\n             = 120\n```\n\n**Key Concepts:**\n- **Recursion**: Function calling itself\n- **Base case**: Condition that stops recursion\n- **Call stack**: Each recursive call is added to the stack\n\n**Limitations:**\n- Can cause stack overflow for very large numbers\n- Less efficient than iterative approach\n- JavaScript recursion depth typically limited to ~10,000 calls",
+  "metadata": {
+    "model": "tinyllama",
+    "timestamp": "2025-01-01T12:00:00Z",
+    "provider": "ollama",
+    "temperature": 0.7,
+    "maxTokens": 2048,
+    "responseTime": 1200,
+    "tags": ["code-explanation", "recursion", "factorial", "javascript", "algorithms"]
+  },
+  "validation": {
+    "expectedPatterns": [
+      "recursive",
+      "base case",
+      "factorial",
+      "calls itself"
+    ],
+    "shouldNotContain": ["error", "syntax"],
+    "minLength": 300,
+    "maxLength": 3000
+  }
+}

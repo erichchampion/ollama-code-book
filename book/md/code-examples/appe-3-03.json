@@ -1,0 +1,13 @@
+{
+  "security": {
+    "credentialStore": {
+      "type": "encrypted-file",
+      "path": "~/.ollama-code/credentials.enc",
+      "encryption": {
+        "algorithm": "aes-256-gcm",
+        "keyDerivation": "pbkdf2",
+        "iterations": 100000
+      }
+    }
+  }
+}

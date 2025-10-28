@@ -1,0 +1,8 @@
+{
+  "performance": {
+    "memory": {
+      "gcEnabled": true,
+      "gcInterval": 60000  // Every minute
+    }
+  }
+}

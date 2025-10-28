@@ -1,0 +1,411 @@
+{
+  "name": "ollama-code-vscode",
+  "displayName": "Ollama Code",
+  "description": "AI-powered development assistant with comprehensive code analysis and generation capabilities",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "ollama",
+    "code-generation",
+    "analysis",
+    "assistant",
+    "completion",
+    "refactoring"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ollama-code.ask",
+        "title": "Ask AI",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.explain",
+        "title": "Explain Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.refactor",
+        "title": "Refactor Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.fix",
+        "title": "Fix Code Issues",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.generate",
+        "title": "Generate Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.analyze",
+        "title": "Analyze Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.startServer",
+        "title": "Start Integration Server",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.stopServer",
+        "title": "Stop Integration Server",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.showOutput",
+        "title": "Show Output",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.optimizeCode",
+        "title": "Optimize Code Performance",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.generateTests",
+        "title": "Generate Unit Tests",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.securityAnalysis",
+        "title": "Run Security Analysis",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.findBugs",
+        "title": "Find Bugs and Issues",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.addDocumentation",
+        "title": "Add Documentation",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.improveReadability",
+        "title": "Improve Code Readability",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.analyzeFunction",
+        "title": "Analyze Function Complexity",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.analyzeFile",
+        "title": "Analyze Current File",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.refactorCode",
+        "title": "AI Refactor Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.improveCode",
+        "title": "AI Improve Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.toggleConnection",
+        "title": "Toggle AI Connection",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.showQuickActions",
+        "title": "Show AI Quick Actions",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.showProgress",
+        "title": "Show AI Operation Progress",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.showConfiguration",
+        "title": "Open Configuration",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollama-code.resetConfiguration",
+        "title": "Reset Configuration",
+        "category": "Ollama Code"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "ollama-code-context",
+          "group": "ollama-code@1"
+        }
+      ],
+      "ollama-code-context": [
+        {
+          "command": "ollama-code.explain",
+          "when": "editorHasSelection",
+          "group": "analysis@1"
+        },
+        {
+          "command": "ollama-code.refactor",
+          "when": "editorHasSelection",
+          "group": "modification@1"
+        },
+        {
+          "command": "ollama-code.fix",
+          "when": "editorHasSelection",
+          "group": "modification@2"
+        },
+        {
+          "command": "ollama-code.generate",
+          "group": "generation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ollama-code.ask",
+          "when": "true"
+        },
+        {
+          "command": "ollama-code.explain",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.refactor",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.fix",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.generate",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.analyze",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "ollama-code.optimizeCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.generateTests",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.securityAnalysis",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.findBugs",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.addDocumentation",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.improveReadability",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.analyzeFunction",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "ollama-code.analyzeFile",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.refactorCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.improveCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ollama-code.toggleConnection",
+          "when": "true"
+        },
+        {
+          "command": "ollama-code.showQuickActions",
+          "when": "true"
+        },
+        {
+          "command": "ollama-code.showConfiguration",
+          "when": "true"
+        },
+        {
+          "command": "ollama-code.resetConfiguration",
+          "when": "true"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "ollama-code-context",
+        "label": "Ollama Code"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "ollama-code-chat",
+          "name": "AI Chat",
+          "when": "config.ollama-code.showChatView"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ollama-code-chat",
+        "contents": "Welcome to Ollama Code AI Assistant!\n\n[Start Chat](command:ollama-code.ask)\n\nConnect to the Ollama Code CLI backend to begin using AI-powered development assistance.",
+        "when": "!ollama-code.connected"
+      }
+    ],
+    "configuration": {
+      "title": "Ollama Code",
+      "properties": {
+        "ollama-code.serverPort": {
+          "type": "number",
+          "default": 3002,
+          "description": "Port for the Ollama Code integration server"
+        },
+        "ollama-code.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the integration server when VS Code starts"
+        },
+        "ollama-code.showChatView": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the AI Chat view in the Explorer panel"
+        },
+        "ollama-code.inlineCompletions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered inline code completions"
+        },
+        "ollama-code.codeActions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered code actions and quick fixes"
+        },
+        "ollama-code.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered code diagnostics and suggestions"
+        },
+        "ollama-code.contextLines": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 100,
+          "description": "Number of context lines to include around cursor position"
+        },
+        "ollama-code.connectionTimeout": {
+          "type": "number",
+          "default": 10000,
+          "description": "Connection timeout in milliseconds"
+        },
+        "ollama-code.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "default": "info",
+          "description": "Logging level for the extension"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "ollama-code.ask",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "ollama-code.explain",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "ollama-code.refactor",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "ollama-code.fix",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "when": "editorHasSelection"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./dist/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@types/ws": "^8.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.3.0",
+    "eslint": "^8.0.0",
+    "glob": "^11.0.3",
+    "mocha": "^11.7.2",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "ws": "^8.14.0"
+  },
+  "publisher": "ollama-code",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ollama-code/ollama-code.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ollama-code/ollama-code/issues"
+  },
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "code-generation-simple-function",
+  "category": "code-generation",
+  "prompt": "Generate a JavaScript function that adds two numbers",
+  "response": "Here's a JavaScript function that adds two numbers:\n\n```javascript\nfunction add(a, b) {\n  return a + b;\n}\n```\n\nThis function takes two parameters `a` and `b`, and returns their sum. You can use it like this:\n\n```javascript\nconst result = add(5, 3);\nconsole.log(result); // Output: 8\n```",
+  "metadata": {
+    "model": "tinyllama",
+    "timestamp": "2025-01-01T12:00:00Z",
+    "provider": "ollama",
+    "temperature": 0.7,
+    "maxTokens": 2048,
+    "responseTime": 850,
+    "tags": ["code-generation", "javascript", "simple-function", "addition"]
+  },
+  "validation": {
+    "expectedPatterns": ["function", "add", "return", "\\+"],
+    "shouldNotContain": ["error", "undefined", "null"],
+    "minLength": 50,
+    "maxLength": 2000
+  }
+}

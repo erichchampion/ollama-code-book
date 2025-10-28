@@ -1,0 +1,3 @@
+// User types: calculateDiscount(
+// Show: calculateDiscount(price: number, discountPercent: number): number
+//       Calculates discounted price. price: The original price...

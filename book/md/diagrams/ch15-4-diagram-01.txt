@@ -1,0 +1,21 @@
+devops-ai-assistant/
+├── src/
+│   ├── index.ts                 # CLI entry point
+│   ├── assistant.ts             # Main assistant class
+│   ├── plugins/
+│   │   ├── kubernetes.ts        # Kubernetes plugin
+│   │   ├── terraform.ts         # Terraform plugin
+│   │   └── aws.ts               # AWS plugin
+│   ├── tools/
+│   │   ├── k8s-generator.ts     # Generate K8s YAML
+│   │   ├── k8s-validator.ts     # Validate K8s configs
+│   │   ├── tf-generator.ts      # Generate Terraform
+│   │   └── security-scanner.ts  # Security scanning
+│   ├── integrations/
+│   │   ├── kubectl.ts           # kubectl integration
+│   │   └── terraform.ts         # terraform CLI
+│   └── config/
+│       └── models.ts            # Model configurations
+├── tests/
+├── package.json
+└── tsconfig.json

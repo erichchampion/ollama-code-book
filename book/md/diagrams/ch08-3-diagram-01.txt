@@ -1,0 +1,51 @@
+┌─────────────────────────────────────────────────────────────┐
+│                    Natural Language Input                    │
+│          "commit my auth changes and run tests"             │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Intent Classifier                          │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ AI-Powered Classification                             │  │
+│  │ • Analyze input semantics                            │  │
+│  │ • Match to known intents                             │  │
+│  │ • Extract parameters                                 │  │
+│  │ • Calculate confidence                               │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  Result: [{ intent: "COMMIT", confidence: 0.95 },          │
+│           { intent: "TEST", confidence: 0.92 }]            │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                      Command Router                          │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Routes intents to commands                           │  │
+│  │ • Load command lazily                                │  │
+│  │ • Validate route exists                              │  │
+│  │ • Handle multi-step workflows                        │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  Result: [CommitCommand, TestCommand]                      │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Parameter Inference Engine                  │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Infers missing parameters from context              │  │
+│  │ • File system analysis                               │  │
+│  │ • Git status                                         │  │
+│  │ • Conversation history                               │  │
+│  │ • Project structure                                  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  Result: { files: ["src/auth/"], tests: "npm test" }      │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Command Execution                         │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Execute commands in sequence                         │  │
+│  │ • Dependency resolution                              │  │
+│  │ • Progress tracking                                  │  │
+│  │ • Error handling                                     │  │
+│  └──────────────────────────────────────────────────────┘  │
+│  Result: ✓ Committed and tests passed                     │
+└─────────────────────────────────────────────────────────────┘

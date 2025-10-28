@@ -1,0 +1,7 @@
+{
+  "provider": "ollama",
+  "model": "codellama:7b",
+  "cache": true,
+  "streaming": true,
+  "concurrency": 3
+}

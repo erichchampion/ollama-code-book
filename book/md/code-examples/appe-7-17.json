@@ -1,0 +1,14 @@
+{
+  "timestamp": "2024-01-15T10:30:45.123Z",
+  "level": "info",
+  "event": "file:read",
+  "user": "user@example.com",
+  "ip": "192.168.1.100",
+  "action": "read_file",
+  "resource": "/home/user/project/src/index.ts",
+  "result": "success",
+  "metadata": {
+    "fileSize": 1024,
+    "duration": 15
+  }
+}

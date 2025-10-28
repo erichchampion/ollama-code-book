@@ -1,0 +1,14 @@
+{
+  "name": "small-test-project",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Small test project for E2E testing",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": ["test", "fixture"],
+  "author": "Test Author",
+  "license": "MIT"
+}

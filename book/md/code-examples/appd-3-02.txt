@@ -1,0 +1,3 @@
+Without cache: 1000 requests × $0.01 = $10.00
+With 70% hit rate: 300 requests × $0.01 = $3.00
+Savings: $7.00 (70%)

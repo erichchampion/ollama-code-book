@@ -1,0 +1,107 @@
+{
+  "name": "ollama-code-vscode",
+  "displayName": "Ollama Code AI Assistant",
+  "description": "AI coding assistant powered by Ollama",
+  "version": "1.0.0",
+  "publisher": "your-publisher-id",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Programming Languages", "Machine Learning"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ollamaCode.explainCode",
+        "title": "Explain Code",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollamaCode.fixError",
+        "title": "Fix Error",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollamaCode.generateTests",
+        "title": "Generate Tests",
+        "category": "Ollama Code"
+      },
+      {
+        "command": "ollamaCode.refactor",
+        "title": "Refactor Code",
+        "category": "Ollama Code"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "ollamaCode.explainCode",
+          "group": "ollamaCode@1"
+        },
+        {
+          "when": "editorHasSelection",
+          "command": "ollamaCode.refactor",
+          "group": "ollamaCode@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ollamaCode.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ollamaCode.fixError",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Ollama Code",
+      "properties": {
+        "ollamaCode.model": {
+          "type": "string",
+          "default": "codellama:7b",
+          "description": "Default AI model to use"
+        },
+        "ollamaCode.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API URL"
+        },
+        "ollamaCode.maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "description": "Maximum tokens for completions"
+        },
+        "ollamaCode.enableInlineCompletions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline AI completions"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "yarn run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "yarn run compile",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.4.0"
+  }
+}

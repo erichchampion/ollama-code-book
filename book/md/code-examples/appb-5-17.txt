@@ -1,0 +1,3 @@
+gemini-1.0-pro      - 32K context
+gemini-1.5-pro      - 1M context
+gemini-1.5-flash    - 1M context, faster

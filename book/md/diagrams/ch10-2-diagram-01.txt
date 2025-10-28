@@ -1,0 +1,24 @@
+┌─────────────────────────────────────────────────────────────┐
+│                   Testing Pyramid for AI                     │
+└─────────────────────────────────────────────────────────────┘
+
+                    ▲
+                   ╱ ╲
+                  ╱   ╲  E2E Tests (Few)
+                 ╱     ╲  - Real AI providers
+                ╱       ╲ - End-to-end workflows
+               ╱─────────╲ - Slow but comprehensive
+              ╱           ╲
+             ╱             ╲
+            ╱               ╲ Integration Tests (Some)
+           ╱                 ╲ - Mock AI providers
+          ╱                   ╲ - Component integration
+         ╱                     ╲ - Fast, deterministic
+        ╱───────────────────────╲
+       ╱                         ╲
+      ╱                           ╲
+     ╱                             ╲ Unit Tests (Many)
+    ╱                               ╲ - Pure functions
+   ╱                                 ╲ - No AI calls
+  ╱                                   ╲ - Very fast
+ ╱─────────────────────────────────────╲

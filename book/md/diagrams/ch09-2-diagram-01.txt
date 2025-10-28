@@ -1,0 +1,52 @@
+┌─────────────────────────────────────────────────────────────┐
+│                      User Input                              │
+│           "Delete old database backups"                      │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Input Validation                           │
+│  • Sanitize input                                            │
+│  • Detect injection attempts                                 │
+│  • Check against allowed patterns                            │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Privacy Filter                              │
+│  • Redact secrets (API keys, passwords)                      │
+│  • Remove PII                                                │
+│  • Filter sensitive paths                                    │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   AI Processing                              │
+│  [Safe to send to AI provider]                              │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Operation Classification                        │
+│  Classify: READ | WRITE | DELETE | EXECUTE                  │
+│  Risk level: SAFE | LOW | MEDIUM | HIGH | CRITICAL          │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 Approval Gate                                │
+│  • Auto-approve: SAFE, LOW risk operations                  │
+│  • Require approval: MEDIUM+ risk                            │
+│  • Require 2FA: CRITICAL risk                                │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                Sandboxed Execution                           │
+│  • Path restrictions (allowlist/blocklist)                   │
+│  • Resource limits (CPU, memory, time)                       │
+│  • Network isolation (optional)                              │
+│  • Capability restrictions                                   │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Audit Logging                              │
+│  • Log all operations                                        │
+│  • Redact sensitive data                                     │
+│  • Include context and outcome                               │
+│  • Enable forensics                                          │
+└─────────────────────────────────────────────────────────────┘

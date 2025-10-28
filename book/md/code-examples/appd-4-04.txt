@@ -1,0 +1,7 @@
+Non-Streaming:
+[........wait 2.8s........] Full response appears
+
+Streaming:
+[.0.28s.] First token
+[........1.5s.........] Streaming tokens...
+[........2.8s.........] Complete

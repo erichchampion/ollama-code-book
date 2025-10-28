@@ -1,0 +1,5 @@
+Week 0: No plugins
+Week 4: 5 core plugins
+Week 12: 20 community plugins
+Week 24: 50+ plugins
+Year 1: 100+ plugins, thriving ecosystem

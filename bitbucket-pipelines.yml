@@ -1,0 +1,94 @@
+image: node:20
+definitions:
+  caches:
+    nodemodules: node_modules
+    yarn: ~/.cache/yarn
+  steps:
+    - step:
+        name: Analysis
+        caches:
+          - nodemodules
+          - yarn
+        script:
+          - echo "📦 Installing dependencies..."
+          - yarn install --frozen-lockfile
+          - echo "🔨 Building project..."
+          - yarn build
+          - echo "🔍 Running Ollama Code Analysis..."
+          - >-
+            node dist/src/ai/vcs/ci-pipeline-integrator.js --platform bitbucket
+            --repository-path . --enable-security true --enable-performance true
+            --enable-architecture true --enable-regression true
+            --min-quality-score 80 --max-critical-issues 0 --max-security-issues
+            5 --max-performance-issues 3 --min-test-coverage 80
+            --regression-threshold medium --report-format json --output-path
+            ./reports
+          - if [ -f "reports/ollama-code-report.json" ]; then
+          - '  QUALITY_GATES=$(jq -r ''.qualityGatePassed'' reports/ollama-code-report.json)'
+          - '  QUALITY_SCORE=$(jq -r ''.overallScore'' reports/ollama-code-report.json)'
+          - '  echo "Quality Score: ${QUALITY_SCORE}/100"'
+          - '  if [ "$QUALITY_GATES" = "true" ]; then'
+          - '    echo "✅ All quality gates passed"'
+          - '  else'
+          - '    echo "❌ Quality gates failed - review required"'
+          - '    exit 1'
+          - '  fi'
+          - else
+          - '  echo "Analysis report not found"'
+          - '  exit 1'
+          - fi
+        artifacts:
+          - reports/**
+pipelines:
+  default:
+    - step:
+        name: Code Analysis
+        script:
+          - echo "📦 Installing dependencies..."
+          - yarn install --frozen-lockfile
+          - echo "🔨 Building project..."
+          - yarn build
+          - echo "🔍 Running Ollama Code Analysis..."
+          - >-
+            node dist/src/ai/vcs/ci-pipeline-integrator.js --platform bitbucket
+            --repository-path . --enable-security true --enable-performance true
+            --enable-architecture true --enable-regression true
+            --min-quality-score 80 --max-critical-issues 0 --max-security-issues
+            5 --max-performance-issues 3 --min-test-coverage 80
+            --regression-threshold medium --report-format json --output-path
+            ./reports
+          - if [ -f "reports/ollama-code-report.json" ]; then
+          - '  QUALITY_GATES=$(jq -r ''.qualityGatePassed'' reports/ollama-code-report.json)'
+          - '  QUALITY_SCORE=$(jq -r ''.overallScore'' reports/ollama-code-report.json)'
+          - '  echo "Quality Score: ${QUALITY_SCORE}/100"'
+          - '  if [ "$QUALITY_GATES" = "true" ]; then'
+          - '    echo "✅ All quality gates passed"'
+          - '  else'
+          - '    echo "❌ Quality gates failed - review required"'
+          - '    exit 1'
+          - '  fi'
+          - else
+          - '  echo "Analysis report not found"'
+          - '  exit 1'
+          - fi
+          - echo "📊 Generating consolidated reports..."
+          - if [ -f "reports/ollama-code-report.json" ]; then
+          - '  QUALITY_SCORE=$(jq -r ''.overallScore'' reports/ollama-code-report.json)'
+          - '  SECURITY_ISSUES=$(jq -r ''.results.security.totalVulnerabilities // 0'' reports/ollama-code-report.json)'
+          - '  PERFORMANCE_ISSUES=$(jq -r ''.results.performance.totalIssues // 0'' reports/ollama-code-report.json)'
+          - '  REGRESSION_RISK=$(jq -r ''.results.regression.overallRisk // "unknown"'' reports/ollama-code-report.json)'
+          - '  # Generate summary'
+          - '  cat > reports/summary.md <<EOL'
+          - '## 🤖 Ollama Code Analysis Results'
+          - ''
+          - '### 📊 Overall Quality Score: ${QUALITY_SCORE}/100'
+          - ''
+          - '#### 📈 Key Metrics:'
+          - '- 🛡️ Security Issues: ${SECURITY_ISSUES}'
+          - '- ⚡ Performance Issues: ${PERFORMANCE_ISSUES}'
+          - '- ⚠️ Regression Risk: ${REGRESSION_RISK}'
+          - EOL
+          - fi
+        artifacts:
+          - reports/**
+

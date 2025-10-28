@@ -1,0 +1,7 @@
+{
+  "providers": {
+    "ollama": {
+      "keepAlive": "30m"  // Keep model loaded
+    }
+  }
+}

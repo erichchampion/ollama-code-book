@@ -1,0 +1,70 @@
+providers:
+  ollama:
+    baseUrl: http://localhost:11434
+    model: codellama:7b
+    timeout: 30000
+    keepAlive: 5m
+
+  openai:
+    apiKey: ${OPENAI_API_KEY}
+    model: gpt-4-turbo
+    timeout: 30000
+
+  anthropic:
+    apiKey: ${ANTHROPIC_API_KEY}
+    model: claude-3-sonnet-20240229
+    maxTokens: 4096
+
+defaultProvider: ollama
+
+tools:
+  maxConcurrency: 5
+  timeout: 60000
+  approvalRequired: true
+  cache:
+    enabled: true
+    ttl: 300000
+    maxSize: 1000
+
+conversation:
+  maxTokens: 8000
+  strategy: recent
+  autoSave: true
+  persistPath: ~/.ollama-code/conversations
+
+plugins:
+  enabled:
+    - kubernetes
+    - docker
+    - terraform
+  autoUpdate: false
+  config:
+    kubernetes:
+      kubectl: true
+      helm: true
+
+security:
+  sandboxEnabled: true
+  allowedCommands:
+    - git
+    - npm
+    - yarn
+    - kubectl
+  allowedPaths:
+    - ~/projects
+    - /tmp
+  deniedPaths:
+    - ~/.ssh
+    - ~/.aws
+  maxFileSize: 10485760
+
+logging:
+  level: info
+  format: json
+  destination: file
+  filePath: ~/.ollama-code/logs/app.log
+
+performance:
+  cacheEnabled: true
+  cacheTTL: 300000
+  maxCacheSize: 1000

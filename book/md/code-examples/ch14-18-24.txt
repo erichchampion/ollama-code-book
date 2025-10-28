@@ -1,0 +1,15 @@
+;; Emacs config (elisp)
+(use-package lsp-mode
+  :config
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection
+                     '("node" "/path/to/language-server.js" "--stdio"))
+    :major-modes '(typescript-mode javascript-mode python-mode go-mode)
+    :server-id 'ollama-code
+    :initialization-options
+    '((model . "codellama:7b")
+      (apiUrl . "http://localhost:11434")))))
+
+(add-hook 'typescript-mode-hook #'lsp)
+(add-hook 'javascript-mode-hook #'lsp)

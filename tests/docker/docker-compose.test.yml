@@ -1,0 +1,36 @@
+# Docker Compose for Test Environment
+# Purpose: Orchestrate Ollama test instance for automated testing
+
+version: '3.8'
+
+services:
+  ollama-test:
+    build:
+      context: .
+      dockerfile: ollama-test.Dockerfile
+    container_name: ollama-code-test
+    ports:
+      - "11435:11434"  # Use different port to avoid conflicts with local Ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_MODELS=/root/.ollama/models
+    volumes:
+      - ollama-test-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  ollama-test-data:
+    driver: local

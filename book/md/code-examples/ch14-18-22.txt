@@ -1,0 +1,21 @@
+// IntelliJ plugin (Kotlin/Java)
+import com.intellij.openapi.project.Project
+import org.eclipse.lsp4j.launch.LSPLauncher
+import java.io.InputStream
+import java.io.OutputStream
+
+class OllamaCodeLanguageServer(private val project: Project) {
+    fun start() {
+        val serverProcess = ProcessBuilder()
+            .command("node", "/path/to/language-server.js")
+            .start()
+
+        val launcher = LSPLauncher.createClientLauncher(
+            this,
+            serverProcess.inputStream,
+            serverProcess.outputStream
+        )
+
+        launcher.startListening()
+    }
+}
