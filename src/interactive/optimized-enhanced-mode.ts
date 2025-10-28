@@ -270,6 +270,9 @@ export class OptimizedEnhancedMode {
     }
 
     this.terminal?.info('Goodbye! 👋');
+
+    // Exit the process to ensure cleanup
+    process.exit(0);
   }
 
   /**
