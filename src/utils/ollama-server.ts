@@ -54,6 +54,10 @@ export interface OllamaServerStartupConfig {
 
 /**
  * Start Ollama server in the background
+ *
+ * CRITICAL: Ensures all timeouts and intervals are properly cleaned up.
+ * The cleanup() function is called in both resolve and reject paths to prevent
+ * resource leaks and ensure timers don't fire after promise settlement.
  */
 export async function startOllamaServer(config: OllamaServerStartupConfig = {}): Promise<void> {
   logger.info('Starting Ollama server in the background...');
@@ -76,7 +80,10 @@ export async function startOllamaServer(config: OllamaServerStartupConfig = {}):
     let healthCheckIntervalHandle: NodeJS.Timeout | null = null;
     let healthCheckRetries = 0;
 
-    // Cleanup function to prevent memory leaks and race conditions
+    /**
+     * Cleanup function to prevent memory leaks and race conditions.
+     * Clears all timers and intervals. Safe to call multiple times.
+     */
     const cleanup = () => {
       if (startupTimeoutHandle) {
         clearTimeout(startupTimeoutHandle);
@@ -86,23 +93,30 @@ export async function startOllamaServer(config: OllamaServerStartupConfig = {}):
         clearInterval(healthCheckIntervalHandle);
         healthCheckIntervalHandle = null;
       }
+      logger.debug('Ollama server startup timers cleaned up');
     };
 
-    // Safe resolve function that can only be called once
+    /**
+     * Safe resolve function that can only be called once.
+     * ALWAYS calls cleanup() to ensure no lingering timers.
+     */
     const resolveOnce = (message: string) => {
       if (!resolved) {
         resolved = true;
-        cleanup();
+        cleanup(); // CRITICAL: Always cleanup before resolving
         logger.info(message);
         resolve();
       }
     };
 
-    // Safe reject function that can only be called once
+    /**
+     * Safe reject function that can only be called once.
+     * ALWAYS calls cleanup() to ensure no lingering timers.
+     */
     const rejectOnce = (error: any) => {
       if (!resolved) {
         resolved = true;
-        cleanup();
+        cleanup(); // CRITICAL: Always cleanup before rejecting
         ollamaProcess.kill();
         reject(error);
       }

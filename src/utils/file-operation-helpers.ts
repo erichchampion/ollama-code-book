@@ -306,3 +306,182 @@ export function isFramework(tech: string): boolean {
   return (FILE_OPERATION_CONSTANTS.FRAMEWORKS as readonly string[])
     .includes(tech.toLowerCase());
 }
+
+/**
+ * Ensure a directory exists, creating it and any parent directories if needed
+ *
+ * This is an idempotent operation - it will succeed even if the directory
+ * already exists. Uses recursive directory creation internally.
+ *
+ * @param dirPath - The directory path to ensure exists
+ * @throws Error if directory cannot be created or path is invalid
+ *
+ * @example
+ * ```typescript
+ * // Create a single directory
+ * await ensureDirectory('/path/to/dir');
+ *
+ * // Create nested directories
+ * await ensureDirectory('/path/to/nested/dir');
+ *
+ * // Idempotent - safe to call multiple times
+ * await ensureDirectory('/existing/dir'); // No error
+ * ```
+ */
+export async function ensureDirectory(dirPath: string): Promise<void> {
+  if (!dirPath || typeof dirPath !== 'string') {
+    throw new Error('Directory path must be a non-empty string');
+  }
+
+  const fs = await import('fs/promises');
+
+  try {
+    // Create directory recursively - will not fail if already exists
+    await fs.mkdir(dirPath, { recursive: true });
+  } catch (error: any) {
+    // Re-throw with more context
+    const message = `Failed to create directory "${dirPath}": ${error.message}`;
+    const enhancedError = new Error(message);
+    (enhancedError as any).code = error.code;
+    (enhancedError as any).path = dirPath;
+    (enhancedError as any).originalError = error;
+    throw enhancedError;
+  }
+}
+
+/**
+ * Ensure multiple directories exist
+ *
+ * @param dirPaths - Array of directory paths to ensure exist
+ * @returns Promise that resolves when all directories are created
+ *
+ * @example
+ * ```typescript
+ * await ensureDirectories([
+ *   '/path/to/logs',
+ *   '/path/to/cache',
+ *   '/path/to/temp'
+ * ]);
+ * ```
+ */
+export async function ensureDirectories(dirPaths: string[]): Promise<void> {
+  await Promise.all(dirPaths.map(dirPath => ensureDirectory(dirPath)));
+}
+
+/**
+ * Read a text file with size limit protection
+ *
+ * @param filePath - Path to the file to read
+ * @param options - Read options
+ * @returns The file contents as a string
+ * @throws Error if file is too large, doesn't exist, or cannot be read
+ *
+ * @example
+ * ```typescript
+ * const content = await readTextFile('/path/to/file.txt');
+ *
+ * const content = await readTextFile('/path/to/file.txt', {
+ *   encoding: 'utf-8',
+ *   maxSizeBytes: 1024 * 1024 // 1MB
+ * });
+ * ```
+ */
+export async function readTextFile(
+  filePath: string,
+  options: {
+    encoding?: BufferEncoding;
+    maxSizeBytes?: number;
+  } = {}
+): Promise<string> {
+  const { encoding = 'utf-8', maxSizeBytes = 10 * 1024 * 1024 } = options; // Default 10MB
+
+  const fs = await import('fs/promises');
+
+  try {
+    // Check file size first
+    const stats = await fs.stat(filePath);
+
+    if (stats.size > maxSizeBytes) {
+      throw new Error(
+        `File size (${stats.size} bytes) exceeds maximum allowed size (${maxSizeBytes} bytes)`
+      );
+    }
+
+    // Read the file
+    const content = await fs.readFile(filePath, encoding);
+    return content;
+  } catch (error: any) {
+    // Enhance error message
+    if (error.code === 'ENOENT') {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    if (error.code === 'EACCES') {
+      throw new Error(`Permission denied reading file: ${filePath}`);
+    }
+
+    // Re-throw enhanced error
+    if (!error.message.includes(filePath)) {
+      const message = `Failed to read file "${filePath}": ${error.message}`;
+      const enhancedError = new Error(message);
+      (enhancedError as any).code = error.code;
+      (enhancedError as any).path = filePath;
+      (enhancedError as any).originalError = error;
+      throw enhancedError;
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Check if a path exists and is a directory
+ *
+ * @param dirPath - Path to check
+ * @returns True if path exists and is a directory
+ */
+export async function isDirectory(dirPath: string): Promise<boolean> {
+  const fs = await import('fs/promises');
+  try {
+    const stats = await fs.stat(dirPath);
+    return stats.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a path exists and is a file
+ *
+ * @param filePath - Path to check
+ * @returns True if path exists and is a file
+ */
+export async function isFile(filePath: string): Promise<boolean> {
+  const fs = await import('fs/promises');
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the size of a file in bytes
+ *
+ * @param filePath - Path to the file
+ * @returns File size in bytes
+ * @throws Error if file doesn't exist or cannot be accessed
+ */
+export async function getFileSize(filePath: string): Promise<number> {
+  const fs = await import('fs/promises');
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.size;
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    throw error;
+  }
+}

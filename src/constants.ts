@@ -5,6 +5,8 @@
  * This helps maintain consistency and makes configuration changes easier.
  */
 
+import { FILE_SIZE_LIMITS } from './constants/buffer-limits.js';
+
 // =============================================================================
 // NETWORK & API CONSTANTS
 // =============================================================================
@@ -108,13 +110,13 @@ export const DEFAULT_MAX_RETRY_DELAY = 5000;
 // =============================================================================
 
 /** Maximum file size for reading operations (10MB) */
-export const MAX_FILE_READ_SIZE = 10 * 1024 * 1024;
+export const MAX_FILE_READ_SIZE = FILE_SIZE_LIMITS.READ;
 
 /** Maximum file size for code analysis (1MB) */
-export const MAX_CODE_ANALYSIS_FILE_SIZE = 1024 * 1024;
+export const MAX_CODE_ANALYSIS_FILE_SIZE = FILE_SIZE_LIMITS.ANALYSIS;
 
 /** Maximum file size for text processing (5MB) */
-export const MAX_TEXT_PROCESSING_SIZE = 5 * 1024 * 1024;
+export const MAX_TEXT_PROCESSING_SIZE = FILE_SIZE_LIMITS.TEXT_PROCESSING;
 
 // =============================================================================
 // TELEMETRY CONSTANTS

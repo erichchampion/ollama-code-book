@@ -8,6 +8,7 @@
 
 import { AppConfig } from './types.js';
 import { TIMEOUT_CONSTANTS } from './constants.js';
+import { CHUNK_SIZE_LIMITS } from '../constants/buffer-limits.js';
 
 /**
  * Default configuration values
@@ -43,7 +44,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 
     filesystem: {
       maxConcurrentOps: 10,
-      chunkSize: 64 * 1024, // 64 KB
+      chunkSize: CHUNK_SIZE_LIMITS.FILE_READ, // 64 KB
       enableCaching: true
     }
   },

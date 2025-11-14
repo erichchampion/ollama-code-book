@@ -9,6 +9,7 @@ import { ErrorLevel, ErrorCategory, ErrorManager, ErrorOptions } from './types.j
 import { formatErrorForDisplay } from './formatter.js';
 import { setupSentryReporting } from './sentry.js';
 import { setupConsoleErrorHandling } from './console.js';
+import { getErrorMessage } from '../utils/error-utils.js';
 
 /**
  * Initialize error handling system
@@ -90,7 +91,7 @@ class ErrorHandlerImpl implements ErrorManager {
     const level = options.level || ErrorLevel.WARNING;
     
     // Track error count for rate limiting
-    const errorKey = `${category}:${level}:${this.getErrorMessage(error)}`;
+    const errorKey = `${category}:${level}:${getErrorMessage(error)}`;
     const count = (this.errorCount.get(errorKey) || 0) + 1;
     this.errorCount.set(errorKey, count);
     
@@ -126,27 +127,10 @@ class ErrorHandlerImpl implements ErrorManager {
     } catch (formattingError) {
       // If formatting fails, return a basic error object
       return {
-        message: this.getErrorMessage(error),
+        message: getErrorMessage(error),
         originalError: error,
         formattingError
       };
-    }
-  }
-  
-  /**
-   * Get an error message from any error type
-   */
-  private getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    } else if (typeof error === 'string') {
-      return error;
-    } else {
-      try {
-        return JSON.stringify(error);
-      } catch {
-        return String(error);
-      }
     }
   }
   
@@ -194,4 +178,7 @@ class ErrorHandlerImpl implements ErrorManager {
 }
 
 // Export error types
-export * from './types.js'; 
+export * from './types.js';
+
+// Re-export error utilities for convenience
+export { getErrorMessage } from '../utils/error-utils.js'; 

@@ -126,25 +126,68 @@ export async function shutdown(app: AppInstance): Promise<void> {
 
 /**
  * Handle process signals for clean shutdown
+ *
+ * CRITICAL: Signal handlers must NOT be async functions that call process.exit()
+ * immediately after await, as the process will terminate before async cleanup completes.
+ * Instead, we call shutdown().then().catch() to ensure cleanup finishes before exit.
  */
 function setupProcessHandlers(app: AppInstance): void {
-  process.on('SIGINT', async () => {
-    logger.info('Received SIGINT signal');
-    await shutdown(app);
-    process.exit(0);
+  // Track if shutdown is already in progress to prevent double cleanup
+  let shutdownInProgress = false;
+
+  // Cleanup timeout to force exit if cleanup hangs (5 seconds)
+  const CLEANUP_TIMEOUT_MS = 5000;
+
+  /**
+   * Perform graceful shutdown with timeout protection
+   */
+  const performGracefulShutdown = (signal: string, exitCode: number = 0): void => {
+    // Prevent double cleanup on multiple signals
+    if (shutdownInProgress) {
+      logger.warn(`Shutdown already in progress, ignoring ${signal}`);
+      return;
+    }
+
+    shutdownInProgress = true;
+    logger.info(`Received ${signal} signal, initiating graceful shutdown...`);
+
+    // Create cleanup timeout to force exit if cleanup hangs
+    const cleanupTimeout = setTimeout(() => {
+      logger.error(`Cleanup timeout exceeded (${CLEANUP_TIMEOUT_MS}ms), forcing exit`);
+      process.exit(exitCode);
+    }, CLEANUP_TIMEOUT_MS);
+
+    // Perform async cleanup, then exit
+    shutdown(app)
+      .then(() => {
+        clearTimeout(cleanupTimeout);
+        logger.info(`Graceful shutdown complete, exiting with code ${exitCode}`);
+        process.exit(exitCode);
+      })
+      .catch((error) => {
+        clearTimeout(cleanupTimeout);
+        logger.error('Error during shutdown:', error);
+        process.exit(1);
+      });
+  };
+
+  // SIGINT (Ctrl+C) - graceful shutdown
+  process.on('SIGINT', () => {
+    performGracefulShutdown('SIGINT', 0);
   });
-  
-  process.on('SIGTERM', async () => {
-    logger.info('Received SIGTERM signal');
-    await shutdown(app);
-    process.exit(0);
+
+  // SIGTERM (kill command) - graceful shutdown
+  process.on('SIGTERM', () => {
+    performGracefulShutdown('SIGTERM', 0);
   });
-  
+
+  // Unhandled promise rejection - log but don't exit
   process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Promise Rejection:', reason);
     app.errors.handleUnhandledRejection(reason, promise);
   });
-  
+
+  // Uncaught exception - log and exit
   process.on('uncaughtException', (error) => {
     logger.error('Uncaught Exception:', error);
     app.errors.handleUncaughtException(error);

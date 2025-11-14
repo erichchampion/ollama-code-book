@@ -8,10 +8,14 @@
 import { promises as fs } from 'fs';
 import { normalizeError } from '../utils/error-utils.js';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
+
+// Promisified exec for non-blocking git operations
+const execAsync = promisify(exec);
 
 export interface Checkpoint {
   id: string;
@@ -394,21 +398,26 @@ export class BackupManager {
 
   /**
    * Create git checkpoint
+   *
+   * CRITICAL: Uses async exec instead of execSync to avoid blocking event loop.
+   * Git operations can take time on large repositories, and blocking here
+   * would make the entire application unresponsive.
    */
   private async createGitCheckpoint(checkpointId: string, description: string): Promise<string> {
     try {
-      // Check if we're in a git repository
-      execSync('git rev-parse --git-dir', { stdio: 'ignore' });
+      // Check if we're in a git repository (async, non-blocking)
+      await execAsync('git rev-parse --git-dir');
 
       // Create a tag for this checkpoint
       const tagName = `ollama-code-checkpoint-${checkpointId}`;
       const commitMessage = `Checkpoint: ${description}`;
 
-      // Get current commit hash
-      const currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+      // Get current commit hash (async, non-blocking)
+      const { stdout } = await execAsync('git rev-parse HEAD');
+      const currentCommit = stdout.trim();
 
-      // Create annotated tag
-      execSync(`git tag -a "${tagName}" -m "${commitMessage}"`, { stdio: 'ignore' });
+      // Create annotated tag (async, non-blocking)
+      await execAsync(`git tag -a "${tagName}" -m "${commitMessage}"`);
 
       logger.debug('Created git checkpoint', { tagName, commit: currentCommit });
 
@@ -421,14 +430,18 @@ export class BackupManager {
 
   /**
    * Restore git state
+   *
+   * CRITICAL: Uses async exec instead of execSync to avoid blocking event loop.
+   * Git reset operations can be slow on large repositories, and blocking here
+   * would freeze the application.
    */
   private async restoreGitState(commitHash: string): Promise<void> {
     try {
-      // Check if commit exists
-      execSync(`git cat-file -e ${commitHash}`, { stdio: 'ignore' });
+      // Check if commit exists (async, non-blocking)
+      await execAsync(`git cat-file -e ${commitHash}`);
 
-      // Reset to the commit (soft reset to preserve working directory)
-      execSync(`git reset --soft ${commitHash}`, { stdio: 'ignore' });
+      // Reset to the commit (soft reset to preserve working directory, async)
+      await execAsync(`git reset --soft ${commitHash}`);
 
       logger.debug('Restored git state', { commit: commitHash });
 

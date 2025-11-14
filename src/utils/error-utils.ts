@@ -19,7 +19,8 @@ export function getErrorMessage(error: unknown, includeStack = false): string {
   }
   if (error && typeof error === 'object') {
     const errorObj = error as any;
-    if (errorObj.message) {
+    // Check if message property exists (even if it's falsy)
+    if ('message' in errorObj) {
       return String(errorObj.message);
     }
     // Try to stringify object errors

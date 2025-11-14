@@ -500,43 +500,46 @@ class DocumentationVersioner {
     
     const versions = Array.from(this.versions.values())
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-    let changelog = '# Documentation Changelog\n\n';
-    changelog += 'This file contains a record of all changes made to the documentation.\n\n';
-    
+
+    // Use array buffering instead of string concatenation for better performance
+    const parts = [];
+    parts.push('# Documentation Changelog\n\n');
+    parts.push('This file contains a record of all changes made to the documentation.\n\n');
+
     for (const version of versions) {
-      changelog += `## [${version.version}] - ${version.timestamp.split('T')[0]}\n\n`;
-      
+      parts.push(`## [${version.version}] - ${version.timestamp.split('T')[0]}\n\n`);
+
       if (version.message) {
-        changelog += `**${version.message}**\n\n`;
+        parts.push(`**${version.message}**\n\n`);
       }
-      
+
       if (version.changes) {
-        changelog += '### Changes\n\n';
-        
+        parts.push('### Changes\n\n');
+
         if (version.changes.changes.length > 0) {
-          changelog += '#### Files\n\n';
+          parts.push('#### Files\n\n');
           for (const change of version.changes.changes) {
-            changelog += `- ${change.file} (${this.formatBytes(change.size)})\n`;
+            parts.push(`- ${change.file} (${this.formatBytes(change.size)})\n`);
           }
-          changelog += '\n';
+          parts.push('\n');
         }
-        
+
         if (version.changes.authors.length > 0) {
-          changelog += '#### Contributors\n\n';
+          parts.push('#### Contributors\n\n');
           for (const author of version.changes.authors) {
-            changelog += `- ${author}\n`;
+            parts.push(`- ${author}\n`);
           }
-          changelog += '\n';
+          parts.push('\n');
         }
       }
-      
-      changelog += '---\n\n';
+
+      parts.push('---\n\n');
     }
-    
+
+    const changelog = parts.join('');
     const changelogPath = join(projectRoot, 'docs/CHANGELOG.md');
     writeFileSync(changelogPath, changelog);
-    
+
     console.log(`  📄 Changelog generated: ${changelogPath}`);
   }
 }

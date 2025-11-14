@@ -39,6 +39,13 @@ interface PromptResult {
   input: string;
 }
 
+/**
+ * Maximum conversation history size to prevent memory leaks.
+ * Maintains recent context while bounding memory usage.
+ * In long-running sessions, older messages are removed (FIFO).
+ */
+const MAX_CONVERSATION_HISTORY_SIZE = 100;
+
 export class OptimizedEnhancedMode {
   private componentFactory: IComponentFactory;
   private streamingInitializer?: StreamingInitializer;
@@ -50,7 +57,7 @@ export class OptimizedEnhancedMode {
   private running = false;
   private options: Required<OptimizedEnhancedModeOptions>;
   private initializationResult?: any;
-  private conversationHistory: any[] = []; // Track conversation for streaming tools
+  private conversationHistory: any[] = []; // Track conversation for streaming tools (bounded)
   private streamingOrchestrator?: any; // Reuse orchestrator to maintain state
   private conversationInitialized = false; // Track if conversation has been initialized
 
@@ -351,8 +358,8 @@ export class OptimizedEnhancedMode {
         );
       }
 
-      // Add user message to conversation history
-      this.conversationHistory.push({ role: 'user', content: userInput });
+      // Add user message to conversation history (with bounds checking)
+      this.addToConversationHistory({ role: 'user', content: userInput });
 
       // Execute with streaming tools, passing conversation history
       await this.streamingOrchestrator.executeWithStreamingAndHistory(
@@ -1223,26 +1230,38 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
         });
       });
 
-      // Create timeout promise that only rejects
-      const inputTimeout = new Promise<never>((_, reject) => {
+      /**
+       * CRITICAL: Timeout promise resolves with null for proper type safety.
+       *
+       * Previous implementation used Promise<never> that only rejected, causing
+       * TypeScript type issues with Promise.race. Now timeout resolves to null,
+       * giving us Promise.race<PromptResult | null> which is type-safe.
+       *
+       * We can then check if result is null to detect timeout.
+       */
+      const inputTimeout = new Promise<null>(resolve => {
         setTimeout(() => {
           logger.debug('Input timeout triggered');
-          reject(new Error('Input timeout'));
+          resolve(null); // Resolve with null instead of rejecting
         }, TIMEOUT_CONFIG.USER_INPUT);
       });
 
-      // Race the promises
+      // Race the promises - type is now PromptResult | null
       logger.debug('Racing input vs timeout...');
       const result = await Promise.race([inputPromise, inputTimeout]);
 
-      return result;
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('timeout')) {
+      // Check if we timed out (result is null)
+      if (result === null) {
+        logger.warn('Input timeout detected');
         this.terminal.warn('Input timeout - exiting...');
         this.running = false;
         return '';
       }
-      // Re-throw other errors
+
+      return result;
+    } catch (error) {
+      // Handle other errors (not timeout-related)
+      logger.error('Error during input prompt:', error);
       throw error;
     }
   }
@@ -1484,6 +1503,29 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
   }
 
   /**
+   * Add entry to conversation history with bounds checking.
+   *
+   * CRITICAL: Prevents unbounded memory growth in long-running sessions.
+   * Implements FIFO eviction - oldest messages are removed when limit is reached.
+   * This maintains recent context while preventing memory leaks.
+   *
+   * @param entry - Conversation entry to add (role and content)
+   */
+  private addToConversationHistory(entry: { role: string; content: string }): void {
+    this.conversationHistory.push(entry);
+
+    // Enforce memory bounds using FIFO eviction
+    if (this.conversationHistory.length > MAX_CONVERSATION_HISTORY_SIZE) {
+      const removed = this.conversationHistory.shift();
+      logger.debug('Conversation history limit reached, removed oldest entry', {
+        historySize: this.conversationHistory.length,
+        maxSize: MAX_CONVERSATION_HISTORY_SIZE,
+        removedRole: removed?.role
+      });
+    }
+  }
+
+  /**
    * Setup event handlers for component tracking
    */
   private setupEventHandlers(): void {
@@ -1511,10 +1553,24 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
 
   /**
    * Handle errors with graceful degradation
+   *
+   * CRITICAL: Properly handles null terminal to prevent crashes.
+   * When terminal is unavailable, uses safe defaults for error recovery.
    */
   private async handleError(error: any): Promise<void> {
     const formattedError = formatErrorForDisplay(error);
-    this.terminal?.error(formattedError);
+
+    // Check if terminal is available for user interaction
+    if (!this.terminal) {
+      logger.error('Error occurred but terminal unavailable for user prompt:', formattedError);
+      logger.error('Stopping execution due to error without user confirmation');
+      // Safe default: stop execution when we can't ask the user
+      this.running = false;
+      return;
+    }
+
+    // Display error to user
+    this.terminal.error(formattedError);
 
     // Record error in performance monitor
     if (error instanceof Error) {
@@ -1523,7 +1579,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
 
     // Ask if user wants to continue
     try {
-      const shouldContinue = await this.terminal?.prompt({
+      const shouldContinue = await this.terminal.prompt({
         type: 'confirm',
         name: 'continue',
         message: 'An error occurred. Would you like to continue?',
@@ -1533,9 +1589,11 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
       if (!shouldContinue?.continue) {
         this.running = false;
       }
-    } catch {
-      // If we can't prompt, assume they want to continue
-      this.terminal?.info('Continuing...');
+    } catch (promptError) {
+      // If we can't prompt (e.g., terminal became unavailable), log and continue
+      logger.warn('Failed to prompt user after error:', promptError);
+      this.terminal?.info('Continuing after error (prompt unavailable)...');
+      // Default to continuing since we already had a terminal but prompt failed
     }
   }
 

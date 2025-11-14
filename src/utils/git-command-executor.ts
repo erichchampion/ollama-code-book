@@ -9,6 +9,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from './logger.js';
 import path from 'path';
+import { EXEC_BUFFER_LIMITS } from '../constants/buffer-limits.js';
 
 const execAsync = promisify(exec);
 
@@ -81,7 +82,7 @@ export class GitCommandExecutor {
       const { stdout, stderr } = await execAsync(fullCommand, {
         cwd: sanitizedCwd,
         timeout: options.timeout || 30000,
-        maxBuffer: options.maxBuffer || 1024 * 1024 // 1MB default
+        maxBuffer: options.maxBuffer || EXEC_BUFFER_LIMITS.SMALL // 1MB default for git operations
       });
 
       return {

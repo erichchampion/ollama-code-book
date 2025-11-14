@@ -4,6 +4,8 @@
  * Standard WebSocket close codes and IDE-specific constants
  */
 
+import { STREAM_BUFFER_LIMITS } from './buffer-limits.js';
+
 /**
  * Standard WebSocket Close Codes
  * @see https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
@@ -81,7 +83,7 @@ export const IDE_SERVER_DEFAULTS = {
   MAX_CLIENTS: 50,
 
   /** Maximum message size (1MB) */
-  MAX_MESSAGE_SIZE: 1024 * 1024
+  MAX_MESSAGE_SIZE: STREAM_BUFFER_LIMITS.WEBSOCKET_MESSAGE
 } as const;
 
 /**

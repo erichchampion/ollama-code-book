@@ -5,6 +5,8 @@
  * Following DRY principles to eliminate hardcoded values.
  */
 
+import { STREAM_BUFFER_LIMITS, FILE_SIZE_LIMITS } from './buffer-limits.js';
+
 /**
  * Default configuration for streaming tool orchestrator
  */
@@ -44,7 +46,7 @@ export const TOOL_LIMITS = {
   MAX_TOOL_RETRIES: 3,
 
   /** Maximum size of tool output (1MB) */
-  MAX_TOOL_OUTPUT_SIZE: 1024 * 1024,
+  MAX_TOOL_OUTPUT_SIZE: STREAM_BUFFER_LIMITS.TOOL_OUTPUT,
 
   /** Maximum depth for nested tool calls */
   MAX_TOOL_CALL_DEPTH: 5
@@ -105,8 +107,22 @@ export const STREAMING_CONSTANTS = {
    */
   MAX_CONVERSATION_TURNS: 20,
 
-  /** Maximum JSON parse attempts in streaming content */
-  MAX_STREAMING_PARSE_ATTEMPTS: 10
+  /**
+   * Maximum JSON parse attempts in streaming content per turn.
+   *
+   * CRITICAL: Prevents infinite loops when parsing malformed JSON during streaming.
+   * When streaming responses, we attempt to parse JSON incrementally as chunks arrive.
+   * If JSON is malformed or incomplete, parsing will fail repeatedly.
+   *
+   * Value: 100 attempts per turn
+   * - Sufficient for complex nested JSON structures
+   * - Low enough to prevent CPU spinning on pathological input
+   * - Resets to 0 on successful parse or after warning
+   *
+   * Warning is logged when limit exceeded, then counter resets to allow
+   * processing of subsequent chunks in new turns.
+   */
+  MAX_STREAMING_PARSE_ATTEMPTS: 100
 } as const;
 
 /**
@@ -114,8 +130,8 @@ export const STREAMING_CONSTANTS = {
  */
 export const FILE_OPERATION_CONSTANTS = {
   /** Maximum JSON stringify size (1MB) */
-  MAX_JSON_SIZE_BYTES: 1024 * 1024,
+  MAX_JSON_SIZE_BYTES: STREAM_BUFFER_LIMITS.JSON_PAYLOAD,
 
   /** Maximum file size for safe operations (10MB) */
-  MAX_SAFE_FILE_SIZE: 10 * 1024 * 1024
+  MAX_SAFE_FILE_SIZE: FILE_SIZE_LIMITS.SAFE
 } as const;

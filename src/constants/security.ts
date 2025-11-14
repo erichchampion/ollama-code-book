@@ -5,6 +5,8 @@
  * and security policy enforcement.
  */
 
+import { FILE_SIZE_LIMITS } from './buffer-limits.js';
+
 /**
  * Commands that are blocked for security reasons
  */
@@ -80,7 +82,7 @@ export const SECURITY_CONSTANTS = {
   MAX_PATH_DEPTH: 10,
 
   /** Maximum file size for safe operations (100MB) */
-  MAX_SAFE_FILE_SIZE: 100 * 1024 * 1024
+  MAX_SAFE_FILE_SIZE: FILE_SIZE_LIMITS.SAFE_MAX
 } as const;
 
 export type DangerousCommand = typeof DANGEROUS_COMMANDS[number];

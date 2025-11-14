@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import { createUserError } from '../errors/formatter.js';
 import { ErrorCategory } from '../errors/types.js';
 import { Timeout } from '../utils/types.js';
+import { EXEC_BUFFER_LIMITS } from '../constants/buffer-limits.js';
 
 /**
  * Result of a command execution
@@ -68,11 +69,6 @@ const DANGEROUS_COMMANDS = [
  * Maximum command execution time (30 seconds by default)
  */
 const DEFAULT_TIMEOUT = 30000;
-
-/**
- * Maximum output buffer size (5MB by default)
- */
-const DEFAULT_MAX_BUFFER = 5 * 1024 * 1024;
 
 /**
  * Execution environment manager
@@ -135,14 +131,17 @@ class ExecutionEnvironment {
   async executeCommand(command: string, options: ExecutionOptions = {}): Promise<ExecutionResult> {
     // Increment execution count
     this.executionCount++;
-    
+
     // Validate command for safety
     this.validateCommand(command);
-    
+
+    // SECURITY: Additional sanitization for shell metacharacters
+    this.sanitizeCommand(command);
+
     const cwd = options.cwd || this.workingDirectory;
     const env = { ...this.environmentVariables, ...(options.env || {}) };
     const timeout = options.timeout || DEFAULT_TIMEOUT;
-    const maxBuffer = options.maxBuffer || DEFAULT_MAX_BUFFER;
+    const maxBuffer = options.maxBuffer || EXEC_BUFFER_LIMITS.DEFAULT;
     const shell = options.shell || this.config.execution?.shell || process.env.SHELL || 'bash';
     const captureStderr = options.captureStderr !== false;
     
@@ -209,22 +208,32 @@ class ExecutionEnvironment {
   executeCommandInBackground(command: string, options: BackgroundProcessOptions = {}): BackgroundProcess {
     // Validate command for safety
     this.validateCommand(command);
-    
+
+    // Additional sanitization for shell metacharacters
+    this.sanitizeCommand(command);
+
     const cwd = options.cwd || this.workingDirectory;
     const env = { ...this.environmentVariables, ...(options.env || {}) };
-    const shell = options.shell || this.config.execution?.shell || process.env.SHELL || 'bash';
-    
+
     logger.debug('Executing command in background', {
       command,
-      cwd,
-      shell
+      cwd
     });
-    
-    // Spawn the process
-    const childProcess = spawn(command, [], {
+
+    // Parse command into executable and arguments for safer execution
+    const { executable, args } = this.parseCommand(command);
+
+    logger.debug('Parsed command', {
+      executable,
+      args,
+      argsCount: args.length
+    });
+
+    // Spawn the process with parsed arguments (safer than shell string)
+    const childProcess = spawn(executable, args, {
       cwd,
       env,
-      shell,
+      shell: false, // SECURITY: Disable shell to prevent injection
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -273,14 +282,21 @@ class ExecutionEnvironment {
       pid,
       kill: () => {
         if (isRunning) {
-          childProcess.kill();
+          try {
+            childProcess.kill();
+          } catch (error) {
+            // Process may have already exited
+            logger.debug(`Error killing process ${pid}:`, error);
+          }
           isRunning = false;
           this.backgroundProcesses.delete(pid);
           return true;
         }
         return false;
       },
-      isRunning: true
+      get isRunning() {
+        return isRunning;
+      }
     };
     
     // Track the process
@@ -310,16 +326,25 @@ class ExecutionEnvironment {
    * Validate a command for safety
    */
   private validateCommand(command: string): void {
+    // Validate input
+    if (!command || typeof command !== 'string' || command.trim().length === 0) {
+      throw createUserError('Command cannot be empty', {
+        category: ErrorCategory.VALIDATION,
+        resolution: 'Provide a valid command to execute.'
+      });
+    }
+
     // Check if command is in the denied list
     for (const pattern of DANGEROUS_COMMANDS) {
       if (pattern.test(command)) {
+        logger.warn(`Dangerous command blocked: ${command}`);
         throw createUserError(`Command execution blocked: '${command}' matches dangerous pattern`, {
           category: ErrorCategory.COMMAND_EXECUTION,
           resolution: 'This command is blocked for safety reasons. Please use a different command.'
         });
       }
     }
-    
+
     // Check if command is in allowed list (if configured)
     if (this.config.execution?.allowedCommands && this.config.execution.allowedCommands.length > 0) {
       const allowed = this.config.execution.allowedCommands.some(
@@ -331,14 +356,97 @@ class ExecutionEnvironment {
           }
         }
       );
-      
+
       if (!allowed) {
+        logger.warn(`Command not in allowed list: ${command}`);
         throw createUserError(`Command execution blocked: '${command}' is not in the allowed list`, {
           category: ErrorCategory.COMMAND_EXECUTION,
           resolution: 'This command is not allowed by your configuration.'
         });
       }
     }
+  }
+
+  /**
+   * Sanitize command for shell metacharacters that could enable injection
+   * SECURITY: This prevents command injection by rejecting dangerous characters
+   */
+  private sanitizeCommand(command: string): void {
+    // Check for shell metacharacters that could enable command injection
+    const dangerousPatterns = [
+      { pattern: /;/, name: 'semicolon (command separator)' },
+      { pattern: /\|/, name: 'pipe' },
+      { pattern: /&&/, name: 'AND operator' },
+      { pattern: /\|\|/, name: 'OR operator' },
+      { pattern: /&(?!&)/, name: 'background operator' },
+      { pattern: /\$\(/, name: 'command substitution' },
+      { pattern: /`/, name: 'backtick substitution' },
+      { pattern: /</, name: 'input redirection' },
+      { pattern: />/, name: 'output redirection' },
+      { pattern: /\n/, name: 'newline' },
+      { pattern: /\r/, name: 'carriage return' }
+    ];
+
+    for (const { pattern, name } of dangerousPatterns) {
+      if (pattern.test(command)) {
+        logger.warn(`Command contains shell metacharacter (${name}): ${command}`);
+        throw createUserError(`Command contains unsafe shell metacharacter: ${name}`, {
+          category: ErrorCategory.VALIDATION,
+          resolution: 'Remove shell metacharacters like ;, |, &, $, \`, <, > from the command.'
+        });
+      }
+    }
+  }
+
+  /**
+   * Parse command string into executable and arguments
+   * Handles quoted strings and basic argument parsing
+   * SECURITY: Proper parsing prevents shell injection when using shell=false
+   */
+  private parseCommand(command: string): { executable: string; args: string[] } {
+    const parts: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let quoteChar = '';
+
+    for (let i = 0; i < command.length; i++) {
+      const char = command[i];
+
+      if ((char === '"' || char === "'") && !inQuotes) {
+        // Start quote
+        inQuotes = true;
+        quoteChar = char;
+      } else if (char === quoteChar && inQuotes) {
+        // End quote
+        inQuotes = false;
+        quoteChar = '';
+      } else if (char === ' ' && !inQuotes) {
+        // Space outside quotes - split
+        if (current) {
+          parts.push(current);
+          current = '';
+        }
+      } else {
+        current += char;
+      }
+    }
+
+    // Add final part
+    if (current) {
+      parts.push(current);
+    }
+
+    if (parts.length === 0) {
+      throw createUserError('Invalid command format', {
+        category: ErrorCategory.VALIDATION,
+        resolution: 'Provide a valid command with at least an executable name.'
+      });
+    }
+
+    return {
+      executable: parts[0],
+      args: parts.slice(1)
+    };
   }
 
   /**

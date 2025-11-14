@@ -584,6 +584,9 @@ export class OllamaClient {
   
   /**
    * Send a streaming request to the Ollama API
+   *
+   * CRITICAL: Ensures reader lock is ALWAYS released, even on abort or error.
+   * Resource leaks can occur if the reader lock is not properly released.
    */
   private async sendStreamRequest(
     path: string,
@@ -592,35 +595,45 @@ export class OllamaClient {
     abortSignal?: AbortSignal
   ): Promise<void> {
     const url = `${this.baseUrl}${path}`;
-    
+
     logger.debug(`Sending streaming request to ${url}`);
-    
+
+    // Track reader to ensure it's always released
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
     try {
       const response = await fetch(url, options);
-      
+
       if (!response.ok) {
         await this.handleErrorResponse(response);
       }
-      
+
       if (!response.body) {
         throw new Error('Response body is null');
       }
-      
-      const reader = response.body.getReader();
+
+      // Get reader - if this fails, it will be caught by outer try-catch
+      reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
       try {
         while (true) {
+          // Check for abort signal BEFORE reading to avoid unnecessary I/O
+          if (abortSignal?.aborted) {
+            // Cancel the reader before releasing
+            try {
+              await reader.cancel('Stream aborted by user');
+            } catch (cancelError) {
+              logger.debug('Error canceling reader:', cancelError);
+            }
+            throw new Error('Stream aborted');
+          }
+
           const { done, value } = await reader.read();
 
           if (done) {
             break;
-          }
-
-          // Check for abort signal
-          if (abortSignal?.aborted) {
-            throw new Error('Stream aborted');
           }
 
           // Decode the chunk and add to buffer
@@ -680,14 +693,16 @@ export class OllamaClient {
           }
         }
       } finally {
-        // Ensure reader is always released
-        try {
-          reader.releaseLock();
-        } catch (error) {
-          logger.debug('Error releasing reader lock', error);
+        // Ensure reader is always released in inner try block
+        if (reader) {
+          try {
+            reader.releaseLock();
+          } catch (error) {
+            logger.debug('Error releasing reader lock (may already be released)', error);
+          }
         }
       }
-      
+
       // Process any remaining data
       if (buffer.trim()) {
         try {
@@ -704,8 +719,19 @@ export class OllamaClient {
           resolution: 'Try again or increase the timeout setting.'
         });
       }
-      
+
       throw error;
+    } finally {
+      // CRITICAL: Outer finally block ensures reader is released even if
+      // errors occur in the outer try block (e.g., response.body is null)
+      if (reader) {
+        try {
+          reader.releaseLock();
+        } catch (error) {
+          // Ignore errors - reader may already be released
+          logger.debug('Final attempt to release reader lock', error);
+        }
+      }
     }
   }
   

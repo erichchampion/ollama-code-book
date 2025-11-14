@@ -16,6 +16,7 @@ import { ErrorCategory } from '../errors/types.js';
 import { createSpinner } from '../utils/spinner.js';
 import { MAX_SEARCH_RESULTS } from '../constants.js';
 import { AI_CONSTANTS, TIMEOUT_CONSTANTS, DELAY_CONSTANTS } from '../config/constants.js';
+import { EXEC_BUFFER_LIMITS } from '../constants/buffer-limits.js';
 import {
   validateNonEmptyString,
   validateFileExists,
@@ -1085,7 +1086,7 @@ function registerSearchCommand(): void {
 
           logger.debug(`Running search command: ${searchCommand}`);
           const { stdout, stderr } = await execPromise(searchCommand, {
-            maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+            maxBuffer: EXEC_BUFFER_LIMITS.LARGE, // 10MB buffer for search operations
             timeout: TIMEOUT_CONSTANTS.MEDIUM // 30 second timeout
           });
 

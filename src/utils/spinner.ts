@@ -114,21 +114,88 @@ export function createSpinner(text = 'Processing...'): Spinner {
 }
 
 /**
+ * Options for withSpinner wrapper
+ */
+export interface WithSpinnerOptions {
+  /** Message to show on success (false to show no message, undefined for default) */
+  successMessage?: string | false;
+  /** Message to show on failure (false to show no message, undefined for default) */
+  failureMessage?: string | false;
+}
+
+/**
  * Run a function with a spinner
+ *
+ * Consolidated wrapper that eliminates the common spinner try-catch pattern.
+ * Handles spinner lifecycle automatically with custom success/failure messages.
+ *
+ * @param text - Initial spinner text
+ * @param fn - Async function to execute
+ * @param options - Optional success/failure messages
+ * @returns The result of the function
+ * @throws Re-throws any error from the function after showing failure message
+ *
+ * @example
+ * ```typescript
+ * // Basic usage
+ * const result = await withSpinner('Loading...', async () => {
+ *   return await fetchData();
+ * });
+ *
+ * // With custom messages
+ * const commits = await withSpinner(
+ *   'Fetching commits...',
+ *   async () => getCommits(),
+ *   {
+ *     successMessage: 'Recent commits fetched',
+ *     failureMessage: 'Failed to fetch commits'
+ *   }
+ * );
+ *
+ * // Silent success (no message on success)
+ * await withSpinner('Processing...', processData, {
+ *   successMessage: false,
+ *   failureMessage: 'Processing failed'
+ * });
+ * ```
  */
 export async function withSpinner<T>(
   text: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  options: WithSpinnerOptions = {}
 ): Promise<T> {
   const spinner = createSpinner(text);
   spinner.start();
 
   try {
     const result = await fn();
-    spinner.succeed();
+
+    // Handle success message
+    if (options.successMessage === false) {
+      // Silent success - just stop spinner
+      spinner.stop();
+    } else if (options.successMessage) {
+      // Custom success message
+      spinner.succeed(options.successMessage);
+    } else {
+      // Default behavior - stop without message
+      spinner.succeed();
+    }
+
     return result;
   } catch (error) {
-    spinner.fail();
+    // Handle failure message
+    if (options.failureMessage === false) {
+      // Silent failure - just stop spinner
+      spinner.stop();
+    } else if (options.failureMessage) {
+      // Custom failure message
+      spinner.fail(options.failureMessage);
+    } else {
+      // Default behavior - stop without message
+      spinner.fail();
+    }
+
     throw error;
   }
 }

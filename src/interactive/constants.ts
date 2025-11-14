@@ -5,11 +5,13 @@
  * code maintainability and readability.
  */
 
+import { FILE_SIZE_LIMITS } from '../constants/buffer-limits.js';
+
 export const CONSTANTS = {
   // File and project limits
   MAX_FILE_COUNT_ESTIMATE: 1000,
   MAX_FILES_TO_ANALYZE: 5000,
-  MAX_FILE_SIZE_BYTES: 1024 * 1024, // 1MB
+  MAX_FILE_SIZE_BYTES: FILE_SIZE_LIMITS.INTERACTIVE, // 1MB
 
   // Time intervals and delays
   DEPENDENCY_CHECK_INTERVAL_MS: 100,

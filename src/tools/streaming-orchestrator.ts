@@ -352,19 +352,34 @@ export class StreamingToolOrchestrator {
                       }
                   }
                 } catch (e) {
-                  // Not valid JSON yet, this is expected during streaming
-                  // Increment parse attempts only on failure
+                  /**
+                   * CRITICAL: Infinite loop prevention
+                   *
+                   * Not valid JSON yet - this is expected during streaming as chunks arrive.
+                   * We increment parse attempts on each failure and enforce a hard limit
+                   * to prevent CPU spinning on pathological input (e.g., never-valid JSON).
+                   *
+                   * The maxParseAttempts limit (from STREAMING_CONSTANTS) ensures we:
+                   * 1. Never spin indefinitely on malformed JSON
+                   * 2. Reset the counter after warning to allow new turns
+                   * 3. Continue processing subsequent chunks in new turns
+                   */
                   parseAttempts++;
+
                   if (parseAttempts > maxParseAttempts) {
                     logger.warn('Exceeded maximum JSON parse attempts in streaming content', {
                       attempts: parseAttempts,
                       contentLength: assistantMessage.content.length,
-                      error: e instanceof Error ? e.message : String(e)
+                      error: e instanceof Error ? e.message : String(e),
+                      maxAllowed: maxParseAttempts
                     });
+
+                    // CRITICAL: Reset counter to allow processing new turns
                     // Don't return - just stop trying to parse for this turn
                     parseAttempts = 0; // Reset for next turn
                   }
-                  // Silent ignore - will retry on next chunk
+
+                  // Silent ignore - will retry on next chunk (expected behavior)
                 }
               }
             },

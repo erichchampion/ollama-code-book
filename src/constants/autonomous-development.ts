@@ -5,10 +5,12 @@
  * to eliminate hardcoded values and provide consistent defaults.
  */
 
+import { FILE_SIZE_LIMITS } from './buffer-limits.js';
+
 export const AUTONOMOUS_DEVELOPMENT_DEFAULTS = {
   // File Processing Limits
   MAX_CODEBASE_FILES: 50,
-  MAX_FILE_SIZE_BYTES: 1024 * 1024, // 1MB
+  MAX_FILE_SIZE_BYTES: FILE_SIZE_LIMITS.INTERACTIVE, // 1MB
   MAX_PROCESSING_TIME_MS: 30000, // 30 seconds
 
   // Test Coverage Thresholds

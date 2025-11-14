@@ -10,6 +10,17 @@ import { getPerformanceConfig } from '../config/performance.js';
 import { ArchitecturalAnalyzer } from './architectural-analyzer.js';
 import { THRESHOLD_CONSTANTS } from '../config/constants.js';
 import { calculateCyclomaticComplexity } from '../utils/complexity-calculator.js';
+import {
+  COMPLEXITY_THRESHOLDS,
+  MEMORY_THRESHOLDS,
+  PATTERN_THRESHOLDS,
+  SCORE_MULTIPLIERS,
+  PERFORMANCE_WEIGHTS,
+  PATTERN_IMPACT_ESTIMATES,
+  HOTSPOT_IMPACT_ESTIMATES,
+  MEMORY_IMPACT_ESTIMATES,
+  CPU_IMPACT_ESTIMATES
+} from '../constants/performance-thresholds.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -471,7 +482,7 @@ export class PerformanceOptimizer {
     // Memory leaks patterns
     const globalVars = [...content.matchAll(/^(?:var|let|const)\s+(\w+)\s*=/gm)];
     const largArrays = [...content.matchAll(/new Array\((\d+)\)/g)];
-    if (largArrays.some(match => parseInt(match[1]) > 10000)) {
+    if (largArrays.some(match => parseInt(match[1]) > MEMORY_THRESHOLDS.LARGE_ARRAY_SIZE)) {
       patterns.push({
         type: 'large-array',
         severity: 'major',
@@ -481,7 +492,7 @@ export class PerformanceOptimizer {
 
     // Inefficient string operations
     const stringConcat = [...content.matchAll(/\+=\s*['"`]/g)];
-    if (stringConcat.length > 5) {
+    if (stringConcat.length > PATTERN_THRESHOLDS.STRING_CONCATENATION_COUNT) {
       patterns.push({
         type: 'string-concatenation',
         count: stringConcat.length,
@@ -577,38 +588,38 @@ export class PerformanceOptimizer {
     let score = 0;
 
     // Large data structures
-    score += (content.match(/new Array\(\d+\)/g) || []).length * 10;
-    score += (content.match(/new Buffer\(/g) || []).length * 15;
-    score += (content.match(/\.map\s*\(/g) || []).length * 2;
-    score += (content.match(/\.filter\s*\(/g) || []).length * 2;
+    score += (content.match(/new Array\(\d+\)/g) || []).length * SCORE_MULTIPLIERS.MEMORY.ARRAY_ALLOCATION;
+    score += (content.match(/new Buffer\(/g) || []).length * SCORE_MULTIPLIERS.MEMORY.BUFFER_ALLOCATION;
+    score += (content.match(/\.map\s*\(/g) || []).length * SCORE_MULTIPLIERS.MEMORY.MAP_OPERATION;
+    score += (content.match(/\.filter\s*\(/g) || []).length * SCORE_MULTIPLIERS.MEMORY.FILTER_OPERATION;
 
-    return Math.min(score, 100);
+    return Math.min(score, SCORE_MULTIPLIERS.MEMORY.MAX_SCORE);
   }
 
   private calculateCpuUsageScore(content: string): number {
     let score = 0;
 
     // CPU-intensive operations
-    score += (content.match(/for\s*\(/g) || []).length * 2;
-    score += (content.match(/while\s*\(/g) || []).length * 3;
-    score += (content.match(/sort\s*\(/g) || []).length * 5;
-    score += (content.match(/JSON\.(parse|stringify)/g) || []).length * 3;
+    score += (content.match(/for\s*\(/g) || []).length * SCORE_MULTIPLIERS.CPU.FOR_LOOP;
+    score += (content.match(/while\s*\(/g) || []).length * SCORE_MULTIPLIERS.CPU.WHILE_LOOP;
+    score += (content.match(/sort\s*\(/g) || []).length * SCORE_MULTIPLIERS.CPU.SORT_OPERATION;
+    score += (content.match(/JSON\.(parse|stringify)/g) || []).length * SCORE_MULTIPLIERS.CPU.JSON_OPERATION;
 
     // Complexity indicators
     const complexity = calculateCyclomaticComplexity(content);
-    score += complexity.cyclomaticComplexity * 2;
+    score += complexity.cyclomaticComplexity * SCORE_MULTIPLIERS.CPU.COMPLEXITY_MULTIPLIER;
 
-    return Math.min(score, 100);
+    return Math.min(score, SCORE_MULTIPLIERS.CPU.MAX_SCORE);
   }
 
   private calculateIoScore(content: string): number {
     let score = 0;
 
-    score += (content.match(/fs\.\w+/g) || []).length * 5;
-    score += (content.match(/readFile|writeFile/g) || []).length * 8;
-    score += (content.match(/fetch\s*\(|axios\./g) || []).length * 10;
+    score += (content.match(/fs\.\w+/g) || []).length * SCORE_MULTIPLIERS.IO.FS_OPERATION;
+    score += (content.match(/readFile|writeFile/g) || []).length * SCORE_MULTIPLIERS.IO.FILE_READ_WRITE;
+    score += (content.match(/fetch\s*\(|axios\./g) || []).length * SCORE_MULTIPLIERS.IO.NETWORK_REQUEST;
 
-    return Math.min(score, 100);
+    return Math.min(score, SCORE_MULTIPLIERS.IO.MAX_SCORE);
   }
 
   private async identifyBottlenecks(
@@ -621,7 +632,7 @@ export class PerformanceOptimizer {
     // Analyze each file for bottlenecks
     for (const fileAnalysis of staticAnalysis.files) {
       // High complexity bottlenecks
-      if (fileAnalysis.complexity.complexity > 15) {
+      if (fileAnalysis.complexity.complexity > COMPLEXITY_THRESHOLDS.HIGH) {
         bottlenecks.push({
           id: `complexity-${fileAnalysis.file}`,
           type: 'algorithm',
@@ -663,7 +674,7 @@ export class PerformanceOptimizer {
       }
 
       // Resource usage bottlenecks
-      if (fileAnalysis.resourceUsage.memoryUsage > 70) {
+      if (fileAnalysis.resourceUsage.memoryUsage > MEMORY_THRESHOLDS.HIGH) {
         bottlenecks.push({
           id: `memory-${fileAnalysis.file}`,
           type: 'memory',
@@ -1351,7 +1362,12 @@ export class PerformanceOptimizer {
       (sum, opt) => sum + opt.expectedGains.memoryReduction, 0
     ) / optimizations.length;
 
-    const overallScore = Math.max(0, 100 - (criticalIssues * 20) - (majorIssues * 10));
+    const overallScore = Math.max(
+      0,
+      PERFORMANCE_WEIGHTS.BASE_SCORE -
+      (criticalIssues * PERFORMANCE_WEIGHTS.CRITICAL_ISSUE) -
+      (majorIssues * PERFORMANCE_WEIGHTS.MAJOR_ISSUE)
+    );
 
     return {
       overallScore,
@@ -1390,7 +1406,10 @@ export class PerformanceOptimizer {
       optimizationsProposed: optimizations.length,
       totalLinesAnalyzed: totalLines,
       complexityScore: avgComplexity,
-      performanceScore: Math.max(0, 100 - (bottlenecks.length * 5))
+      performanceScore: Math.max(
+        0,
+        PERFORMANCE_WEIGHTS.BASE_SCORE - (bottlenecks.length * PERFORMANCE_WEIGHTS.BOTTLENECK)
+      )
     };
   }
 
@@ -1428,19 +1447,19 @@ export class PerformanceOptimizer {
 
   private estimatePatternExecutionImpact(pattern: any): number {
     const impacts: Record<string, number> = {
-      'nested-loops': 500,
-      'sync-io': 200,
-      'large-array': 100,
-      'string-concatenation': 50,
-      'potential-n-plus-1': 1000
+      'nested-loops': PATTERN_IMPACT_ESTIMATES.NESTED_LOOPS,
+      'sync-io': PATTERN_IMPACT_ESTIMATES.SYNC_IO,
+      'large-array': PATTERN_IMPACT_ESTIMATES.LARGE_ARRAY,
+      'string-concatenation': PATTERN_IMPACT_ESTIMATES.STRING_CONCATENATION,
+      'potential-n-plus-1': PATTERN_IMPACT_ESTIMATES.N_PLUS_ONE
     };
-    return (impacts[pattern.type] || 100) * (pattern.count || 1);
+    return (impacts[pattern.type] || PATTERN_IMPACT_ESTIMATES.LARGE_ARRAY) * (pattern.count || 1);
   }
 
   private estimatePatternMemoryImpact(pattern: any): number {
     const impacts: Record<string, number> = {
-      'large-array': 10000000, // 10MB
-      'string-concatenation': 1000000, // 1MB
+      'large-array': MEMORY_IMPACT_ESTIMATES.LARGE_ARRAY,
+      'string-concatenation': MEMORY_IMPACT_ESTIMATES.STRING_CONCATENATION,
       'nested-loops': 0,
       'sync-io': 0,
       'potential-n-plus-1': 0
@@ -1450,21 +1469,21 @@ export class PerformanceOptimizer {
 
   private estimatePatternCpuImpact(pattern: any): number {
     const impacts: Record<string, number> = {
-      'nested-loops': 80,
-      'string-concatenation': 30,
-      'sync-io': 10,
-      'large-array': 20,
-      'potential-n-plus-1': 50
+      'nested-loops': CPU_IMPACT_ESTIMATES.NESTED_LOOPS,
+      'string-concatenation': CPU_IMPACT_ESTIMATES.STRING_CONCATENATION,
+      'sync-io': CPU_IMPACT_ESTIMATES.SYNC_IO,
+      'large-array': CPU_IMPACT_ESTIMATES.LARGE_ARRAY,
+      'potential-n-plus-1': CPU_IMPACT_ESTIMATES.N_PLUS_ONE
     };
-    return impacts[pattern.type] || 20;
+    return impacts[pattern.type] || CPU_IMPACT_ESTIMATES.DEFAULT;
   }
 
   private estimateHotspotImpact(hotspot: any): number {
     const impacts: Record<string, number> = {
-      'regex-complexity': 100,
-      'sync-in-async': 150,
-      'json-operations': 80
+      'regex-complexity': HOTSPOT_IMPACT_ESTIMATES.REGEX_COMPLEXITY,
+      'sync-in-async': HOTSPOT_IMPACT_ESTIMATES.SYNC_IN_ASYNC,
+      'json-operations': HOTSPOT_IMPACT_ESTIMATES.JSON_OPERATIONS
     };
-    return impacts[hotspot.type] || 50;
+    return impacts[hotspot.type] || HOTSPOT_IMPACT_ESTIMATES.DEFAULT;
   }
 }
