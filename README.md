@@ -9,6 +9,8 @@
 [![VCS Intelligence](https://img.shields.io/badge/VCS-Intelligence-orange.svg)](#vcs-intelligence)
 [![IDE Integration](https://img.shields.io/badge/IDE-Integration-blue.svg)](#ide-integration)
 
+For a detailed overview of the project, see [Building AI Coding Assistants ISBN:979-8-9937022-0-9](https://a.co/d/hRW3iE7)
+
 ## 🚀 Features Overview
 
 ### 🤖 **Multi-Provider AI Integration**
