@@ -44,6 +44,7 @@ export class StreamingToolOrchestrator {
   private recentToolCalls: Map<string, { timestamp: number; success: boolean }> = new Map(); // Track recent tool calls with timestamp and result
   private consecutiveDuplicates: number = 0; // Track consecutive duplicate attempts
   private lastToolSignature: string = ''; // Track the last tool call signature
+  private lastAttemptedToolSignature: string = ''; // Track the last attempted tool call signature (including failed ones)
   private consecutiveSuccessfulDuplicates: number = 0; // Track consecutive successful duplicate calls
   private blockedToolSignatures: Set<string> = new Set(); // Tool signatures to block after hitting duplicate limit
   private static readonly MAX_TOOL_RESULTS = TOOL_LIMITS.MAX_TOOL_RESULTS_CACHE;
@@ -264,92 +265,92 @@ export class StreamingToolOrchestrator {
                   if (toolCallData && toolCallData.name && toolCallData.arguments) {
                     // Reset parse attempts on successful parse
                     parseAttempts = 0;
-                      // Create a unique key to prevent duplicate processing
-                      const callKey = `${toolCallData.name}-${JSON.stringify(toolCallData.arguments)}`;
+                    // Create a unique key to prevent duplicate processing
+                    const callKey = `${toolCallData.name}-${JSON.stringify(toolCallData.arguments)}`;
 
-                      if (!processedSyntheticCalls.has(callKey)) {
-                        processedSyntheticCalls.add(callKey);
-                        totalToolCalls++;
+                    if (!processedSyntheticCalls.has(callKey)) {
+                      processedSyntheticCalls.add(callKey);
+                      totalToolCalls++;
 
-                        // Check tool call limit for synthetic tool calls
-                        if (totalToolCalls > this.config.maxToolsPerRequest) {
-                          const errorMsg = `Exceeded maximum tool calls (${this.config.maxToolsPerRequest})`;
-                          this.safeTerminalCall('error', errorMsg);
-                          logger.error('Max tool calls exceeded (synthetic)', { totalToolCalls, max: this.config.maxToolsPerRequest });
-                          maxToolCallsExceeded = true;
-                          // Don't queue this tool call for execution - skip to next chunk
-                          return;
+                      // Check tool call limit for synthetic tool calls
+                      if (totalToolCalls > this.config.maxToolsPerRequest) {
+                        const errorMsg = `Exceeded maximum tool calls (${this.config.maxToolsPerRequest})`;
+                        this.safeTerminalCall('error', errorMsg);
+                        logger.error('Max tool calls exceeded (synthetic)', { totalToolCalls, max: this.config.maxToolsPerRequest });
+                        maxToolCallsExceeded = true;
+                        // Don't queue this tool call for execution - skip to next chunk
+                        return;
+                      }
+
+                      logger.debug('Detected tool call in content, converting to tool call', toolCallData);
+
+                      // Update our position to skip past this JSON object
+                      // Find the actual end position by counting braces in the original content
+                      let braceCount = 0;
+                      let endPos = startIndex;
+                      let inString = false;
+                      let escaped = false;
+
+                      for (let i = startIndex; i < content.length; i++) {
+                        const char = content[i];
+
+                        if (escaped) {
+                          escaped = false;
+                          continue;
                         }
 
-                        logger.debug('Detected tool call in content, converting to tool call', toolCallData);
+                        if (char === '\\') {
+                          escaped = true;
+                          continue;
+                        }
 
-                        // Update our position to skip past this JSON object
-                        // Find the actual end position by counting braces in the original content
-                        let braceCount = 0;
-                        let endPos = startIndex;
-                        let inString = false;
-                        let escaped = false;
+                        if (char === '"') {
+                          inString = !inString;
+                          continue;
+                        }
 
-                        for (let i = startIndex; i < content.length; i++) {
-                          const char = content[i];
-
-                          if (escaped) {
-                            escaped = false;
-                            continue;
-                          }
-
-                          if (char === '\\') {
-                            escaped = true;
-                            continue;
-                          }
-
-                          if (char === '"') {
-                            inString = !inString;
-                            continue;
-                          }
-
-                          if (!inString) {
-                            if (char === '{') braceCount++;
-                            if (char === '}') {
-                              braceCount--;
-                              if (braceCount === 0) {
-                                endPos = i + 1;
-                                break;
-                              }
+                        if (!inString) {
+                          if (char === '{') braceCount++;
+                          if (char === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                              endPos = i + 1;
+                              break;
                             }
                           }
                         }
-
-                        lastProcessedPosition = endPos;
-
-                        // Create a synthetic tool call
-                        const syntheticToolCall: any = {
-                          id: `${toolCallData.name}-${Date.now()}-${totalToolCalls}`,
-                          function: {
-                            name: toolCallData.name,
-                            arguments: toolCallData.arguments
-                          }
-                        };
-
-                        // Add to turn tool calls
-                        turnToolCalls.push(syntheticToolCall);
-
-                        // Execute it and track the promise
-                        const executePromise = this.executeToolCall(syntheticToolCall, context)
-                          .then(result => {
-                            logger.debug('Synthetic tool call executed', {
-                              name: toolCallData.name,
-                              success: result.success
-                            });
-                            return result;
-                          })
-                          .catch(err => {
-                            logger.error('Synthetic tool call failed', err);
-                            return { success: false, error: err.message };
-                          });
-
-                        syntheticToolCallPromises.push(executePromise);
                       }
+
+                      lastProcessedPosition = endPos;
+
+                      // Create a synthetic tool call
+                      const syntheticToolCall: any = {
+                        id: `${toolCallData.name}-${Date.now()}-${totalToolCalls}`,
+                        function: {
+                          name: toolCallData.name,
+                          arguments: toolCallData.arguments
+                        }
+                      };
+
+                      // Add to turn tool calls
+                      turnToolCalls.push(syntheticToolCall);
+
+                      // Execute it and track the promise
+                      const executePromise = this.executeToolCall(syntheticToolCall, context)
+                        .then(result => {
+                          logger.debug('Synthetic tool call executed', {
+                            name: toolCallData.name,
+                            success: result.success
+                          });
+                          return result;
+                        })
+                        .catch(err => {
+                          logger.error('Synthetic tool call failed', err);
+                          return { success: false, error: err.message };
+                        });
+
+                      syntheticToolCallPromises.push(executePromise);
+                    }
                   }
                 } catch (e) {
                   /**
@@ -660,14 +661,16 @@ export class StreamingToolOrchestrator {
             });
 
             // DEBUG: Log the actual formatted content being sent to model
-            console.log('\n========== 🔍 FORMATTED TOOL RESULT BEING SENT TO MODEL ==========');
-            console.log('Tool:', toolCall.function.name);
-            console.log('Content Length:', resultContent.length);
-            console.log('Content Preview (first 500 chars):');
-            console.log(resultContent.substring(0, 500));
-            console.log('\nFull Tool Result Message:');
-            console.log(JSON.stringify(toolResultMessage, null, 2));
-            console.log('===================================================================\n');
+            if (isDebugMode()) {
+              console.log('\n========== 🔍 FORMATTED TOOL RESULT BEING SENT TO MODEL ==========');
+              console.log('Tool:', toolCall.function.name);
+              console.log('Content Length:', resultContent.length);
+              console.log('Content Preview (first 500 chars):');
+              console.log(resultContent.substring(0, 500));
+              console.log('\nFull Tool Result Message:');
+              console.log(JSON.stringify(toolResultMessage, null, 2));
+              console.log('===================================================================\n');
+            }
 
             // Track consecutive failures
             if (result && !result.success) {
@@ -1198,18 +1201,27 @@ export class StreamingToolOrchestrator {
             });
 
             // DEBUG: Log the actual formatted content being sent to model
-            console.log('\n========== 🔍 FORMATTED TOOL RESULT BEING SENT TO MODEL ==========');
-            console.log('Tool:', toolCall.function.name);
-            console.log('Content Length:', resultContent.length);
-            console.log('Content Preview (first 500 chars):');
-            console.log(resultContent.substring(0, 500));
-            console.log('\nFull Tool Result Message:');
-            console.log(JSON.stringify(toolResultMessage, null, 2));
-            console.log('===================================================================\n');
+            if (isDebugMode()) {
+              console.log('\n========== 🔍 FORMATTED TOOL RESULT BEING SENT TO MODEL ==========');
+              console.log('Tool:', toolCall.function.name);
+              console.log('Content Length:', resultContent.length);
+              console.log('Content Preview (first 500 chars):');
+              console.log(resultContent.substring(0, 500));
+              console.log('\nFull Tool Result Message:');
+              console.log(JSON.stringify(toolResultMessage, null, 2));
+              console.log('===================================================================\n');
+            }
 
             // Track consecutive failures
             if (result && !result.success) {
               consecutiveFailures++;
+
+              // Check if this was a blocked call (orchestrator intervened)
+              if (result.error && result.error.includes('This tool call has been blocked because it was called too many times')) {
+                logger.warn('Blocked tool call error detected, forcing end of conversation');
+                this.safeTerminalCall('warn', `⚠️  Tool call blocked by orchestrator. Ending conversation to prevent loops.`);
+                conversationComplete = true;
+              }
             } else if (result && result.success) {
               consecutiveFailures = 0; // Reset on success
             }
@@ -1239,6 +1251,12 @@ export class StreamingToolOrchestrator {
           } else if (this.consecutiveDuplicates >= StreamingToolOrchestrator.MAX_CONSECUTIVE_DUPLICATES) {
             logger.warn(`Too many consecutive duplicate calls (${this.consecutiveDuplicates}), prompting for answer`);
             this.safeTerminalCall('warn', `⚠️  Detected repeated duplicate tool calls. Prompting for final answer...`);
+
+            // Block this tool signature from being called again
+            if (this.lastAttemptedToolSignature) {
+              this.blockedToolSignatures.add(this.lastAttemptedToolSignature);
+              logger.debug(`Blocked failing tool signature: ${this.lastAttemptedToolSignature}`);
+            }
 
             // Inject a system message telling the LLM to provide an answer
             messages.push({
@@ -1348,6 +1366,7 @@ export class StreamingToolOrchestrator {
 
     // Check for duplicate tool calls with smarter logic
     const callSignature = `${toolName}:${JSON.stringify(parameters)}`;
+    this.lastAttemptedToolSignature = callSignature;
 
     // Check if this tool signature has been blocked due to excessive duplicates
     if (this.blockedToolSignatures.has(callSignature)) {

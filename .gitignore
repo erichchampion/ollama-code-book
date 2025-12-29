@@ -135,3 +135,5 @@ Network Trash Folder
 Temporary Items
 .apdisk
 index.html
+tests/fixtures/projects/small/greeting.txt
+tests/fixtures/projects/small/greeting.txt.*

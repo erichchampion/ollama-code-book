@@ -57,23 +57,25 @@ export const DEFAULT_REPEAT_PENALTY = 1.1;
  * All timeout values are in milliseconds.
  */
 
+import { APP_TIMEOUTS, IDE_TIMEOUTS, MONITORING_TIMEOUTS } from './constants/timeouts.js';
+
 /** Default timeout for AI completion requests (5 minutes) */
-export const AI_COMPLETION_TIMEOUT = 300000;
+export const AI_COMPLETION_TIMEOUT = APP_TIMEOUTS.VERY_LONG;
 
 /** Default timeout for API requests (1 minute) */
-export const API_REQUEST_TIMEOUT = 60000;
+export const API_REQUEST_TIMEOUT = IDE_TIMEOUTS.CLIENT_TIMEOUT;
 
 /** Default timeout for code analysis operations (30 seconds) */
-export const CODE_ANALYSIS_TIMEOUT = 30000;
+export const CODE_ANALYSIS_TIMEOUT = APP_TIMEOUTS.MEDIUM;
 
 /** Default timeout for file operations (10 seconds) */
-export const FILE_OPERATION_TIMEOUT = 10000;
+export const FILE_OPERATION_TIMEOUT = 10000; // Not perfectly matched in timeouts.ts, keeping explicit for now or use VSCODE_CONNECTION_TIMEOUT
 
 /** Default timeout for server health checks (5 seconds) */
-export const SERVER_HEALTH_TIMEOUT = 5000;
+export const SERVER_HEALTH_TIMEOUT = APP_TIMEOUTS.SHORT;
 
 /** Default server startup timeout (30 seconds) */
-export const SERVER_STARTUP_TIMEOUT = 30000;
+export const SERVER_STARTUP_TIMEOUT = APP_TIMEOUTS.MEDIUM;
 
 /**
  * AI Operation Timeouts
@@ -81,10 +83,10 @@ export const SERVER_STARTUP_TIMEOUT = 30000;
  */
 
 /** Timeout for AI intent analysis and classification (30 seconds) */
-export const AI_INTENT_ANALYSIS_TIMEOUT = 30000;
+export const AI_INTENT_ANALYSIS_TIMEOUT = APP_TIMEOUTS.MEDIUM;
 
 /** Timeout for AI entity extraction (30 seconds) */
-export const AI_ENTITY_EXTRACTION_TIMEOUT = 30000;
+export const AI_ENTITY_EXTRACTION_TIMEOUT = APP_TIMEOUTS.MEDIUM;
 
 /** Timeout for interactive mode request processing (uses AI_COMPLETION_TIMEOUT) */
 export const INTERACTIVE_REQUEST_TIMEOUT = AI_COMPLETION_TIMEOUT;

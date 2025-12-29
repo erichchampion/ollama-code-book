@@ -31,8 +31,8 @@ if (isProduction) {
   // Temporarily suppress console output during dotenv loading in production
   const originalLog = console.log;
   const originalError = console.error;
-  console.log = () => {};
-  console.error = () => {};
+  console.log = () => { };
+  console.error = () => { };
 
   try {
     // Try current directory first (for per-project overrides)
@@ -81,6 +81,7 @@ import {
 } from './constants.js';
 import { OptimizedEnhancedMode } from './interactive/optimized-enhanced-mode.js';
 import { SafetyEnhancedMode } from './interactive/safety-enhanced-mode.js';
+import { runSimpleMode } from './simple-mode.js';
 import pkg from '../package.json' with { type: 'json' };
 
 // Get version from package.json
@@ -146,21 +147,21 @@ function setupExitHandlers(): void {
 function displayHelp(commandName?: string): void {
   // Register commands first so we can show them
   registerCommands();
-  
+
   if (commandName && commandName !== 'help') {
     // Display help for a specific command
     const command = commandRegistry.get(commandName);
-    
+
     if (!command) {
       console.error(`Unknown command: ${commandName}`);
       console.error('Use "ollama-code help" to see available commands.');
       process.exit(1);
     }
-    
+
     console.log(generateCommandHelp(command));
     return;
   }
-  
+
   // Display general help
   console.log(`
 Ollama Code CLI v${version}
@@ -179,37 +180,37 @@ Modes:
   --mode interactive Interactive mode - Command loop interface with safety features
 
 Available Commands:`);
-  
+
   // Group commands by category
   const categories = commandRegistry.getCategories();
-  
+
   // Commands without a category
   const uncategorizedCommands = commandRegistry.list()
     .filter(cmd => !cmd.category && !cmd.hidden)
     .sort((a, b) => a.name.localeCompare(b.name));
-  
+
   if (uncategorizedCommands.length > 0) {
     for (const command of uncategorizedCommands) {
       console.log(`  ${command.name.padEnd(15)} ${command.description}`);
     }
     console.log('');
   }
-  
+
   // Commands with categories
   for (const category of categories) {
     console.log(`${category}:`);
-    
+
     const commands = commandRegistry.getByCategory(category)
       .filter(cmd => !cmd.hidden)
       .sort((a, b) => a.name.localeCompare(b.name));
-    
+
     for (const command of commands) {
       console.log(`  ${command.name.padEnd(15)} ${command.description}`);
     }
-    
+
     console.log('');
   }
-  
+
   console.log(`For more information on a specific command, use:
   ollama-code help <command>
 
@@ -232,29 +233,29 @@ function displayVersion(): void {
 /**
  * Parse command-line arguments
  */
-function parseCommandLineArgs(): { 
+function parseCommandLineArgs(): {
   mode: 'simple' | 'advanced' | 'interactive';
-  commandName: string; 
-  args: string[] 
+  commandName: string;
+  args: string[]
 } {
   // Get arguments, excluding node and script path
   const args = process.argv.slice(2);
-  
+
   // Handle help and version flags first
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     displayHelp();
     process.exit(0);
   }
-  
+
   if (args.includes('--version') || args.includes('-v')) {
     displayVersion();
     process.exit(0);
   }
-  
+
   // Check for mode flag (default to advanced)
   let mode: 'simple' | 'advanced' | 'interactive' = 'advanced';
   let commandIndex = 0;
-  
+
   if (args[0] === '--mode' && args.length > 1) {
     const modeArg = args[1].toLowerCase();
     if (['simple', 'advanced', 'interactive'].includes(modeArg)) {
@@ -266,7 +267,7 @@ function parseCommandLineArgs(): {
       process.exit(1);
     }
   }
-  
+
   // Handle case where no command is provided after mode
   if (commandIndex >= args.length) {
     if (mode === 'interactive') {
@@ -276,133 +277,31 @@ function parseCommandLineArgs(): {
       process.exit(0);
     }
   }
-  
+
   // Extract command name
   const commandName = args[commandIndex].toLowerCase();
-  
+
   // Handle help command
   if (commandName === 'help') {
     displayHelp(args[commandIndex + 1]);
     process.exit(0);
   }
-  
+
   // Handle version command
   if (commandName === 'version' || commandName === '--version' || commandName === '-v') {
     displayVersion();
     process.exit(0);
   }
-  
-  return { 
-    mode, 
-    commandName, 
-    args: args.slice(commandIndex + 1) 
+
+  return {
+    mode,
+    commandName,
+    args: args.slice(commandIndex + 1)
   };
 }
 
-/**
- * Run simple mode (basic commands only)
- */
-async function runSimpleMode(commandName: string, args: string[]): Promise<void> {
-  const { OllamaClient } = await import('./ai/ollama-client.js');
-  
-  // Ensure Ollama server is running before creating client
-  console.log('Ensuring Ollama server is running...');
-  await ensureOllamaServerRunning();
-  
-  const client = new OllamaClient();
-  
-  switch (commandName) {
-    case 'ask':
-      if (args.length === 0) {
-        console.error('Please provide a question to ask.');
-        console.log('Example: ollama-code ask "How do I implement a binary search?"');
-        process.exit(1);
-      }
-      
-      const question = args.join(' ');
-      console.log('Asking Ollama...\n');
+// This function is now imported from simple-mode.js
 
-      // Create abort controller for cancellation
-      const abortController = new AbortController();
-
-      // Handle Ctrl+C gracefully
-      const handleInterrupt = () => {
-        abortController.abort();
-        console.log('\n\nRequest cancelled by user.');
-      };
-      process.on('SIGINT', handleInterrupt);
-
-      let responseText = '';
-      try {
-        await client.completeStream(question, {}, (event) => {
-          if (event.message?.content) {
-            process.stdout.write(event.message.content);
-            responseText += event.message.content;
-          }
-        }, abortController.signal);
-      } finally {
-        // Clean up interrupt handler
-        process.off('SIGINT', handleInterrupt);
-      }
-
-      // Add newline at the end
-      if (responseText) {
-        console.log('\n');
-      } else {
-        console.log('No response received');
-      }
-      break;
-      
-    case 'list-models':
-      console.log('Fetching available models...\n');
-      
-      const models = await client.listModels();
-      
-      if (models.length === 0) {
-        console.log('No models found. Use "pull-model <name>" to download a model.');
-        return;
-      }
-      
-      console.log('Available models:');
-      console.log('================');
-      
-      for (const model of models) {
-        const sizeInGB = (model.size / (1024 * 1024 * 1024)).toFixed(2);
-        const modifiedDate = new Date(model.modified_at).toLocaleDateString();
-        
-        console.log(`📦 ${model.name}`);
-        console.log(`   Size: ${sizeInGB} GB`);
-        console.log(`   Modified: ${modifiedDate}`);
-        console.log('');
-      }
-      
-      console.log(`Total: ${models.length} model(s) available`);
-      break;
-      
-    case 'pull-model':
-      if (args.length === 0) {
-        console.error('Please provide a model name to download.');
-        console.log('Example: ollama-code pull-model llama3.2');
-        process.exit(1);
-      }
-      
-      const modelName = args[0];
-      console.log(`Downloading model: ${modelName}`);
-      console.log('This may take several minutes depending on model size...\n');
-      
-      await client.pullModel(modelName);
-      
-      console.log(`✅ Successfully downloaded model: ${modelName}`);
-      console.log('You can now use this model with the ask command.');
-      break;
-      
-    default:
-      console.error(`Unknown command: ${commandName}`);
-      console.log('Simple mode supports: ask, list-models, pull-model');
-      console.log('Use --mode advanced for more commands.');
-      process.exit(1);
-  }
-}
 
 /**
  * Run advanced mode (full command registry) with Phase 4 enhanced startup optimization
@@ -538,9 +437,9 @@ async function initCLI(): Promise<void> {
  */
 function handleError(error: unknown): void {
   const formattedError = formatErrorForDisplay(error);
-  
+
   console.error(formattedError);
-  
+
   // Exit with error code
   if (error instanceof UserError) {
     process.exit(1);
