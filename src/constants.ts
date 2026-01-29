@@ -17,6 +17,25 @@ export const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
 /** Default Ollama server port */
 export const DEFAULT_OLLAMA_PORT = 11434;
 
+// =============================================================================
+// LLAMA.CPP CONSTANTS
+// =============================================================================
+
+/** Default llama.cpp server URL */
+export const DEFAULT_LLAMACPP_URL = 'http://localhost:8080';
+
+/** Default llama.cpp server port */
+export const DEFAULT_LLAMACPP_PORT = 8080;
+
+/** Default llama.cpp context size */
+export const DEFAULT_LLAMACPP_CONTEXT_SIZE = 4096;
+
+/** Default llama.cpp GPU layers (-1 = auto/all) */
+export const DEFAULT_LLAMACPP_GPU_LAYERS = -1;
+
+/** Default llama.cpp model startup timeout (60 seconds for large models) */
+export const LLAMACPP_MODEL_STARTUP_TIMEOUT = 60000;
+
 /** Default API version */
 export const DEFAULT_API_VERSION = 'v1';
 

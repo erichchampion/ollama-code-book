@@ -7,7 +7,7 @@
  */
 
 import { commandRegistry, executeCommand, generateCommandHelp } from './commands/index.js';
-import { logger } from './utils/logger.js';
+import { logger, configureLoggerFromEnv } from './utils/logger.js';
 import { formatErrorForDisplay } from './errors/formatter.js';
 import { initAI } from './ai/index.js';
 import { registerCommands } from './commands/register.js';
@@ -20,6 +20,10 @@ import {
 } from './optimization/startup-optimizer.js';
 import { registerServices, disposeServices } from './core/services.js';
 import pkg from '../package.json' with { type: 'json' };
+
+// Configure logger from environment (LOG_FILE, LOG_LEVEL) so file logging works when CLI is run directly
+configureLoggerFromEnv();
+logger.info('Logger initialized');
 
 // Get version from package.json
 const version = pkg.version;

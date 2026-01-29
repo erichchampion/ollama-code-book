@@ -55,7 +55,7 @@ if (isProduction) {
 }
 
 import { commandRegistry, executeCommand, generateCommandHelp } from './commands/index.js';
-import { logger } from './utils/logger.js';
+import { logger, configureLoggerFromEnv } from './utils/logger.js';
 import { formatErrorForDisplay } from './errors/formatter.js';
 import { initAI, cleanupAI } from './ai/index.js';
 import { registerCommands } from './commands/register.js';
@@ -84,6 +84,9 @@ import { SafetyEnhancedMode } from './interactive/safety-enhanced-mode.js';
 import { runSimpleMode } from './simple-mode.js';
 import pkg from '../package.json' with { type: 'json' };
 
+// Configure logger from environment variables (must be after dotenv.config())
+configureLoggerFromEnv();
+
 // Get version from package.json
 const version = pkg.version;
 
@@ -95,8 +98,12 @@ async function cleanup(): Promise<void> {
   try {
     cleanupAI();
     await disposeServices();
+    // Close logger LAST, after all other cleanup operations that may log
+    logger.close();
   } catch (error) {
     logger.error('Error during cleanup:', error);
+    // Close logger after error logging too
+    logger.close();
   }
 }
 

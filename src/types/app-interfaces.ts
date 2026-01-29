@@ -59,6 +59,7 @@ export interface AppConfig {
     level: 'debug' | 'info' | 'warn' | 'error';
     timestamps: boolean;
     colors: boolean;
+    logFile?: string;  // Optional file path for logging
   };
 
   // App version

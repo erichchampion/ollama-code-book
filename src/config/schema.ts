@@ -23,7 +23,10 @@ import {
   DEFAULT_INCLUDE_PATTERNS,
   MAX_CODE_ANALYSIS_FILE_SIZE,
   CODE_ANALYSIS_TIMEOUT,
-  DEFAULT_TAB_WIDTH
+  DEFAULT_TAB_WIDTH,
+  DEFAULT_LLAMACPP_URL,
+  DEFAULT_LLAMACPP_CONTEXT_SIZE,
+  DEFAULT_LLAMACPP_GPU_LAYERS
 } from '../constants.js';
 
 // Define log level enum
@@ -50,6 +53,20 @@ const OllamaConfigSchema = z.object({
     initialDelayMs: DEFAULT_INITIAL_RETRY_DELAY,
     maxDelayMs: DEFAULT_MAX_RETRY_DELAY
   })
+});
+
+// llama.cpp configuration schema
+const LlamaCppConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  baseUrl: z.string().url().default(DEFAULT_LLAMACPP_URL),
+  modelPath: z.string().optional(),
+  executablePath: z.string().optional(),
+  gpuLayers: z.number().int().default(DEFAULT_LLAMACPP_GPU_LAYERS),
+  contextSize: z.number().int().positive().default(DEFAULT_LLAMACPP_CONTEXT_SIZE),
+  flashAttention: z.boolean().default(false),
+  threads: z.number().int().positive().optional(),
+  parallel: z.number().int().positive().default(1),
+  serverArgs: z.array(z.string()).default([])
 });
 
 // AI model configuration schema
@@ -137,6 +154,17 @@ export const configSchema = z.object({
       maxDelayMs: 5000
     }
   }),
+  llamacpp: LlamaCppConfigSchema.default({
+    enabled: false,
+    baseUrl: DEFAULT_LLAMACPP_URL,
+    gpuLayers: DEFAULT_LLAMACPP_GPU_LAYERS,
+    contextSize: DEFAULT_LLAMACPP_CONTEXT_SIZE,
+    flashAttention: false,
+    parallel: 1,
+    serverArgs: []
+  }),
+  // Active AI provider (ollama, llamacpp, openai, anthropic, google)
+  provider: z.enum(['ollama', 'llamacpp', 'openai', 'anthropic', 'google']).default('ollama'),
   ai: AiConfigSchema.default({
     defaultModel: 'qwen2.5-coder:latest',
     defaultTemperature: 0.7,
@@ -304,6 +332,7 @@ export {
   LogLevel,
   ApiConfigSchema,
   OllamaConfigSchema,
+  LlamaCppConfigSchema,
   AiConfigSchema,
   TelemetryConfigSchema,
   TerminalConfigSchema,

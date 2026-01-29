@@ -22,16 +22,17 @@ let projectContext: ProjectContext | null = null;
 let taskPlanner: TaskPlanner | null = null;
 
 /**
- * Initialize the AI module with enhanced capabilities
- * Supports both Ollama (local) and Anthropic (Claude) providers
+ * Initialize only the basic AI client (Ollama or Anthropic)
+ * This is a lightweight initialization for commands that only need model listing/pulling
+ * Does not initialize project context, enhanced client, or task planner
  */
-export async function initAI(config: any = {}): Promise<{
-  ollamaClient: OllamaClient;
-  enhancedClient: EnhancedClient;
-  projectContext: ProjectContext;
-  taskPlanner: TaskPlanner;
-}> {
-  logger.info('Initializing enhanced AI module');
+export async function initAIBasic(config: any = {}): Promise<OllamaClient> {
+  // Return existing client if already initialized
+  if (aiClient) {
+    return aiClient;
+  }
+
+  logger.info('Initializing basic AI client');
 
   try {
     // Determine which model to use (from config or default)
@@ -51,14 +52,14 @@ export async function initAI(config: any = {}): Promise<{
         });
       }
 
-      // Create Anthropic adapter that wraps AnthropicProvider with OllamaClient interface
+      // Create Anthropic adapter
       aiClient = new AnthropicOllamaAdapter({
         ...config,
         model: model,
         apiKey: process.env.ANTHROPIC_API_KEY
       });
 
-      // Test connection (verify API key exists)
+      // Test connection
       const connectionSuccess = await aiClient.testConnection();
       if (!connectionSuccess) {
         throw createUserError('Failed to initialize Anthropic provider', {
@@ -84,7 +85,37 @@ export async function initAI(config: any = {}): Promise<{
           resolution: 'Make sure Ollama is running. Try running "ollama serve" to start the server.'
         });
       }
+
+      logger.info('Ollama client initialized successfully');
     }
+
+    return aiClient;
+  } catch (error) {
+    logger.error('Failed to initialize basic AI client', error);
+
+    throw createUserError('Failed to initialize AI capabilities', {
+      cause: error,
+      category: ErrorCategory.INITIALIZATION,
+      resolution: 'Make sure Ollama is running and try again.'
+    });
+  }
+}
+
+/**
+ * Initialize the AI module with enhanced capabilities
+ * Supports both Ollama (local) and Anthropic (Claude) providers
+ */
+export async function initAI(config: any = {}): Promise<{
+  ollamaClient: OllamaClient;
+  enhancedClient: EnhancedClient;
+  projectContext: ProjectContext;
+  taskPlanner: TaskPlanner;
+}> {
+  logger.info('Initializing enhanced AI module');
+
+  try {
+    // Initialize basic AI client first (reuses existing if already initialized)
+    aiClient = await initAIBasic(config);
 
     // Initialize project context
     const projectRoot = process.cwd();
@@ -226,6 +257,7 @@ export function cleanupAI(): void {
 
 // Re-export core types and components
 export * from './ollama-client.js';
+export * from './llamacpp-client.js';
 export * from './prompts.js';
 
 // Re-export enhanced AI components

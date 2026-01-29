@@ -137,12 +137,35 @@ function loadConfigFromEnv(): Partial<AppConfig> {
     };
   }
 
-  // Check for log level
+  // Check for log level (supports both OLLAMA_LOG_LEVEL and LOG_LEVEL)
   if (process.env.OLLAMA_LOG_LEVEL) {
     const level = process.env.OLLAMA_LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error';
     envConfig.logger = {
       ...(envConfig.logger as Record<string, unknown> || {}),
       level
+    };
+  } else if (process.env.LOG_LEVEL) {
+    // LOG_LEVEL uses numeric values (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=SILENT)
+    const numericLevel = parseInt(process.env.LOG_LEVEL, 10);
+    const levelMap: Record<number, 'debug' | 'info' | 'warn' | 'error'> = {
+      0: 'debug',
+      1: 'info',
+      2: 'warn',
+      3: 'error'
+    };
+    if (!isNaN(numericLevel) && levelMap[numericLevel]) {
+      envConfig.logger = {
+        ...(envConfig.logger as Record<string, unknown> || {}),
+        level: levelMap[numericLevel]
+      };
+    }
+  }
+
+  // Check for log file path
+  if (process.env.LOG_FILE && process.env.LOG_FILE.trim() !== '') {
+    envConfig.logger = {
+      ...(envConfig.logger as Record<string, unknown> || {}),
+      logFile: process.env.LOG_FILE.trim()
     };
   }
 
@@ -160,6 +183,79 @@ function loadConfigFromEnv(): Partial<AppConfig> {
       ...(envConfig.ai as Record<string, unknown> || {}),
       model: process.env.OLLAMA_MODEL
     };
+  }
+
+  // Load llama.cpp configuration from environment variables
+  const llamacppConfig: Record<string, unknown> = {};
+
+  // LLAMACPP_ENABLED
+  if (process.env.LLAMACPP_ENABLED !== undefined) {
+    llamacppConfig.enabled = process.env.LLAMACPP_ENABLED === 'true' || process.env.LLAMACPP_ENABLED === '1';
+  }
+
+  // LLAMACPP_API_URL
+  if (process.env.LLAMACPP_API_URL) {
+    llamacppConfig.baseUrl = process.env.LLAMACPP_API_URL;
+  }
+
+  // LLAMACPP_MODEL_PATH
+  if (process.env.LLAMACPP_MODEL_PATH) {
+    llamacppConfig.modelPath = process.env.LLAMACPP_MODEL_PATH;
+  }
+
+  // LLAMACPP_EXECUTABLE
+  if (process.env.LLAMACPP_EXECUTABLE) {
+    llamacppConfig.executablePath = process.env.LLAMACPP_EXECUTABLE;
+  }
+
+  // LLAMACPP_GPU_LAYERS
+  if (process.env.LLAMACPP_GPU_LAYERS !== undefined) {
+    const gpuLayers = parseInt(process.env.LLAMACPP_GPU_LAYERS, 10);
+    if (!isNaN(gpuLayers)) {
+      llamacppConfig.gpuLayers = gpuLayers;
+    }
+  }
+
+  // LLAMACPP_CONTEXT_SIZE
+  if (process.env.LLAMACPP_CONTEXT_SIZE !== undefined) {
+    const contextSize = parseInt(process.env.LLAMACPP_CONTEXT_SIZE, 10);
+    if (!isNaN(contextSize) && contextSize > 0) {
+      llamacppConfig.contextSize = contextSize;
+    }
+  }
+
+  // LLAMACPP_FLASH_ATTENTION
+  if (process.env.LLAMACPP_FLASH_ATTENTION !== undefined) {
+    llamacppConfig.flashAttention = process.env.LLAMACPP_FLASH_ATTENTION === 'true' || process.env.LLAMACPP_FLASH_ATTENTION === '1';
+  }
+
+  // LLAMACPP_THREADS
+  if (process.env.LLAMACPP_THREADS !== undefined) {
+    const threads = parseInt(process.env.LLAMACPP_THREADS, 10);
+    if (!isNaN(threads) && threads > 0) {
+      llamacppConfig.threads = threads;
+    }
+  }
+
+  // LLAMACPP_PARALLEL
+  if (process.env.LLAMACPP_PARALLEL !== undefined) {
+    const parallel = parseInt(process.env.LLAMACPP_PARALLEL, 10);
+    if (!isNaN(parallel) && parallel > 0) {
+      llamacppConfig.parallel = parallel;
+    }
+  }
+
+  // Only add llamacpp config if any env vars were set
+  if (Object.keys(llamacppConfig).length > 0) {
+    envConfig.llamacpp = llamacppConfig;
+  }
+
+  // Check for provider override
+  if (process.env.AI_PROVIDER) {
+    const provider = process.env.AI_PROVIDER.toLowerCase();
+    if (['ollama', 'llamacpp', 'openai', 'anthropic', 'google'].includes(provider)) {
+      (envConfig as Record<string, unknown>).provider = provider;
+    }
   }
 
   return envConfig as Partial<AppConfig>;

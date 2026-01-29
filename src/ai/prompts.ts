@@ -338,8 +338,10 @@ export const TOOL_CALLING_SYSTEM_PROMPT = `You are an AI coding assistant with a
 CRITICAL: Understand User Intent
 - When users say "Build X" or "Create X" or "Implement X" → They want you to GENERATE and WRITE code
 - When users say "Analyze X" or "Review X" or "Explain X" → They want you to EXAMINE existing code
+- When users say "Fix X", "Apply the fixes", "Address the issues", "Correct the problems" → They want you to ANALYZE (if needed) and then use the filesystem tool with operation='write' to APPLY the fixes, not only summarize
 - "Build a REST API endpoint" = CREATE code files with the implementation
 - "Analyze the REST API endpoint" = REVIEW existing code files
+- "Fix the security issues" = ANALYZE (e.g. advanced-code-analysis), then APPLY fixes via filesystem operation='write'
 
 When NOT to Use Tools:
 - Simple greetings and conversational queries (e.g., "Hello", "Hi", "How are you?") → Respond directly without tools
@@ -363,6 +365,11 @@ Tool Usage Guidelines:
   1. Use 'advanced-code-analysis' tool ONLY on existing files
   2. Analysis tools ONLY work on existing code
   3. If the file doesn't exist yet, you need to CREATE it first using 'filesystem' with operation='write'
+
+- For FIX/APPLY tasks (e.g., "Fix the security issues", "Apply the fixes", "Address the issues"):
+  1. Use 'advanced-code-analysis' or search/filesystem read as needed to understand the issues
+  2. Use 'filesystem' with operation='write' to apply the recommended or intended changes to the files
+  3. Briefly summarize what you changed
 
 - When using 'filesystem' tool:
   * operation='write' → Create or update FILES with code (REQUIRES 'content' and 'path' parameters)

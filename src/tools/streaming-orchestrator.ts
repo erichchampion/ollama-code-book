@@ -177,6 +177,7 @@ export class StreamingToolOrchestrator {
       const maxConsecutiveFailures = 3; // Stop if too many failures in a row
       let consecutiveTurnsWithOnlyToolCalls = 0; // Track turns with only tool calls and no text
       const maxConsecutiveTurnsWithOnlyToolCalls = 2; // Force answer after 2 turns of only tool calls
+      let maxToolCallsRecoveryTurnUsed = false; // One recovery turn when per-turn tool limit is hit
 
       while (!conversationComplete && turnCount < maxTurns) {
         turnCount++;
@@ -566,9 +567,8 @@ export class StreamingToolOrchestrator {
 
                   resultContent = report;
 
-                  // IMPORTANT: Inject instruction telling the model to provide an answer
-                  // Ollama models tend to continue calling tools instead of providing text answers
-                  resultContent += `\n\n⚠️ IMPORTANT: You have received the security analysis results above. Please provide a summary answer to the user about the security issues found. Do NOT call any more tools - just summarize the findings in your response.`;
+                  // Softer instruction: allow follow-up filesystem writes when user asked to fix/apply
+                  resultContent += `\n\nSummarize the findings for the user. If the user asked you to fix or apply these issues, use the filesystem tool with operation='write' to apply the changes to the relevant files, then summarize what you changed.`;
                 } else {
                   // Other analysis types - use generic formatting
                   resultContent = `Tool execution successful. Analysis completed.\nResult: ${JSON.stringify(analysisData).slice(0, 500)}...`;
@@ -682,9 +682,21 @@ export class StreamingToolOrchestrator {
 
           // Check if tool call limit was exceeded during this turn
           if (maxToolCallsExceeded) {
-            logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
-            this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
-            conversationComplete = true;
+            if (maxToolCallsRecoveryTurnUsed) {
+              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
+              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
+              conversationComplete = true;
+            } else {
+              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, prompting for final answer`);
+              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Requesting final answer...`);
+
+              conversationHistory.push({
+                role: 'system',
+                content: `You have reached the maximum number of tool calls for this turn (${this.config.maxToolsPerRequest}). Do NOT make any more tool calls. Provide your final answer to the user in plain text only. If you have already applied fixes to the codebase, summarize what you changed. If not, briefly state what was done and what the user should do next. No JSON, no further tool calls.`
+              });
+              maxToolCallsRecoveryTurnUsed = true;
+              conversationComplete = false;
+            }
           } else if (consecutiveTurnsWithOnlyToolCalls >= maxConsecutiveTurnsWithOnlyToolCalls) {
             logger.warn(`Too many consecutive turns with only tool calls (${consecutiveTurnsWithOnlyToolCalls}), forcing final answer`);
             this.safeTerminalCall('warn', `⚠️  Multiple tool calls completed. Requesting final answer...`);
@@ -751,9 +763,21 @@ export class StreamingToolOrchestrator {
         } else {
           // Check if tool call limit was exceeded (even though no tool calls were added)
           if (maxToolCallsExceeded) {
-            logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
-            this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
-            conversationComplete = true;
+            if (maxToolCallsRecoveryTurnUsed) {
+              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
+              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
+              conversationComplete = true;
+            } else {
+              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, prompting for final answer`);
+              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Requesting final answer...`);
+
+              conversationHistory.push({
+                role: 'system',
+                content: `You have reached the maximum number of tool calls for this turn (${this.config.maxToolsPerRequest}). Do NOT make any more tool calls. Provide your final answer to the user in plain text only. If you have already applied fixes to the codebase, summarize what you changed. If not, briefly state what was done and what the user should do next. No JSON, no further tool calls.`
+              });
+              maxToolCallsRecoveryTurnUsed = true;
+              conversationComplete = false;
+            }
           } else {
             // No tool calls means conversation is complete
             conversationComplete = true;
@@ -1107,9 +1131,8 @@ export class StreamingToolOrchestrator {
 
                   resultContent = report;
 
-                  // IMPORTANT: Inject instruction telling the model to provide an answer
-                  // Ollama models tend to continue calling tools instead of providing text answers
-                  resultContent += `\n\n⚠️ IMPORTANT: You have received the security analysis results above. Please provide a summary answer to the user about the security issues found. Do NOT call any more tools - just summarize the findings in your response.`;
+                  // Softer instruction: allow follow-up filesystem writes when user asked to fix/apply
+                  resultContent += `\n\nSummarize the findings for the user. If the user asked you to fix or apply these issues, use the filesystem tool with operation='write' to apply the changes to the relevant files, then summarize what you changed.`;
                 } else {
                   // Other analysis types - use generic formatting
                   resultContent = `Tool execution successful. Analysis completed.\nResult: ${JSON.stringify(analysisData).slice(0, 500)}...`;

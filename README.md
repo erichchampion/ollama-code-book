@@ -43,6 +43,7 @@ For a detailed overview of the project, see [Building AI Coding Assistants ISBN:
 - [Installation](#installation)
 - [CLI Modes](#cli-modes)
 - [Multi-Provider AI Setup](#multi-provider-ai-setup)
+- [llama.cpp Setup](#llamacpp-setup)
 - [VCS Intelligence](#vcs-intelligence)
 - [IDE Integration](#ide-integration)
 - [Core Features](#core-features)
@@ -90,7 +91,7 @@ ollama-code generate-pipeline github --enable-quality-gates
 ### Prerequisites
 - **Node.js** ≥18.0.0
 - **Git** (for VCS features)
-- **Ollama** (local AI models)
+- **Ollama** or **llama.cpp** (local AI models - see [llama.cpp Setup](#llamacpp-setup))
 - **VS Code** (for IDE integration)
 
 ### Installation Methods
@@ -183,7 +184,8 @@ ollama-code-advanced fine-tune train --base-model qwen2.5-coder:latest
 ## 🤖 Multi-Provider AI Setup
 
 ### Supported Providers
-- **Ollama** - Local models with fine-tuning
+- **Ollama** - Local models with fine-tuning (default)
+- **llama.cpp** - Direct GGUF model inference via llama-server
 - **OpenAI** - GPT models with cost optimization
 - **Anthropic** - Claude models with enterprise features
 - **Google AI** - Gemini with multimodal capabilities
@@ -220,6 +222,160 @@ ollama-code fusion generate "complex prompt" --providers "ollama,openai,anthropi
 
 # Provider benchmarking
 ollama-code benchmark-providers --task "code-generation" --iterations 10
+```
+
+## 🦙 llama.cpp Setup
+
+llama.cpp provides an alternative to Ollama for running local AI models. It allows you to run GGUF models directly via llama-server without needing Ollama installed.
+
+### Why Use llama.cpp?
+- **Direct GGUF Support** - Run any GGUF model without conversion
+- **Lower Memory Overhead** - More efficient than Ollama for single-model use
+- **Fine-Grained Control** - Direct control over GPU layers, context size, and more
+- **No Additional Services** - Just the model file and llama-server
+
+### Installation
+
+#### 1. Install llama.cpp
+```bash
+# macOS (Homebrew)
+brew install llama.cpp
+
+# Build from source
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make -j
+
+# The server binary is at ./llama-server (or build/bin/llama-server)
+```
+
+#### 2. Download a GGUF Model
+```bash
+# Example: Qwen 2.5 Coder (recommended for coding tasks)
+# Download from Hugging Face: https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF
+
+# Or use any GGUF model compatible with llama.cpp
+```
+
+### Configuration
+
+#### Option 1: Environment Variables
+```bash
+# Required: Set the provider and model path
+export AI_PROVIDER=llamacpp
+export LLAMACPP_MODEL_PATH=~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf
+
+# Optional: Custom server URL (default: http://localhost:8080)
+export LLAMACPP_API_URL=http://localhost:8080
+
+# Optional: Performance tuning
+export LLAMACPP_GPU_LAYERS=-1        # -1 = auto (use all GPU layers)
+export LLAMACPP_CONTEXT_SIZE=8192    # Context window size
+export LLAMACPP_FLASH_ATTENTION=true # Enable flash attention
+export LLAMACPP_THREADS=8            # CPU threads for inference
+
+# Then run ollama-code
+ollama-code --interactive
+```
+
+#### Option 2: Configuration File
+Add to your `.ollama-code.json` or `~/.config/ollama-code/config.json`:
+```json
+{
+  "provider": "llamacpp",
+  "llamacpp": {
+    "enabled": true,
+    "baseUrl": "http://localhost:8080",
+    "modelPath": "~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+    "contextSize": 8192,
+    "gpuLayers": -1,
+    "flashAttention": true
+  }
+}
+```
+
+#### Option 3: Manual Server Start
+```bash
+# Start llama-server manually with your preferred settings
+llama-server \
+  -m ~/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf \
+  --port 8080 \
+  -c 8192 \
+  -ngl -1 \
+  --flash-attn
+
+# Then configure ollama-code to use it
+export AI_PROVIDER=llamacpp
+export LLAMACPP_API_URL=http://localhost:8080
+ollama-code --interactive
+```
+
+### Provider Commands
+```bash
+# Check llama-server status
+ollama-code llamacpp-status
+
+# Show current provider configuration
+ollama-code show-provider
+
+# Switch between providers
+ollama-code set-provider llamacpp
+ollama-code set-provider ollama
+
+# Get help loading a model
+ollama-code llamacpp-load ~/models/model.gguf
+```
+
+### Environment Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AI_PROVIDER` | Active provider (`ollama`, `llamacpp`, `openai`, etc.) | `ollama` |
+| `LLAMACPP_API_URL` | llama-server URL | `http://localhost:8080` |
+| `LLAMACPP_MODEL_PATH` | Path to GGUF model file | None |
+| `LLAMACPP_EXECUTABLE` | Path to llama-server binary | Auto-detect |
+| `LLAMACPP_GPU_LAYERS` | GPU layers to offload (-1 = all) | `-1` |
+| `LLAMACPP_CONTEXT_SIZE` | Context window size | `4096` |
+| `LLAMACPP_FLASH_ATTENTION` | Enable flash attention | `false` |
+| `LLAMACPP_THREADS` | CPU threads for inference | Auto |
+| `LLAMACPP_PARALLEL` | Parallel sequences | `1` |
+| `LLAMACPP_ENABLED` | Enable llama.cpp provider | `false` |
+
+### Recommended Models for Coding
+- **Qwen 2.5 Coder** (7B/14B) - Excellent for code generation and analysis
+- **DeepSeek Coder** (6.7B/33B) - Strong coding performance
+- **CodeLlama** (7B/13B/34B) - Meta's code-specialized model
+- **StarCoder2** (3B/7B/15B) - Good balance of size and capability
+
+### Troubleshooting
+
+#### Server Not Starting
+```bash
+# Check if llama-server is installed
+which llama-server
+
+# Start manually to see errors
+llama-server -m /path/to/model.gguf --port 8080 -v
+```
+
+#### Out of Memory
+```bash
+# Reduce GPU layers (use more CPU)
+export LLAMACPP_GPU_LAYERS=20  # Only offload 20 layers to GPU
+
+# Use a smaller quantization (q4_k_m instead of q8_0)
+```
+
+#### Slow Performance
+```bash
+# Enable GPU acceleration
+export LLAMACPP_GPU_LAYERS=-1
+
+# Enable flash attention
+export LLAMACPP_FLASH_ATTENTION=true
+
+# Increase threads for CPU inference
+export LLAMACPP_THREADS=8
 ```
 
 ## 🔧 VCS Intelligence

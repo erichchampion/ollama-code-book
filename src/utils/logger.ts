@@ -1,11 +1,14 @@
 /**
  * Logger
- * 
+ *
  * Provides a consistent logging interface across the application.
  * Supports multiple log levels, formatting, and output destinations.
  */
 
 import { ErrorLevel } from '../errors/types.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { stripAnsi } from './formatting.js';
 
 /**
  * Log levels
@@ -26,26 +29,36 @@ export interface LoggerConfig {
    * Minimum log level to display
    */
   level: LogLevel;
-  
+
   /**
    * Whether to include timestamps in logs
    */
   timestamps: boolean;
-  
+
   /**
    * Whether to colorize output
    */
   colors: boolean;
-  
+
   /**
    * Whether to include additional context in logs
    */
   verbose: boolean;
-  
+
   /**
    * Custom output destination (defaults to console)
    */
   destination?: (message: string, level: LogLevel) => void;
+
+  /**
+   * Path to log file (optional)
+   */
+  logFile?: string;
+
+  /**
+   * Whether file logging is enabled
+   */
+  enableFileLogging: boolean;
 }
 
 /**
@@ -56,15 +69,19 @@ const DEFAULT_CONFIG: LoggerConfig = {
   level: LogLevel.ERROR,
   timestamps: true,
   colors: true,
-  verbose: false
+  verbose: false,
+  enableFileLogging: false
 };
 
 /**
  * Logger class
  */
-class Logger {
+export class Logger {
   private config: LoggerConfig;
-  
+  private fileStream?: fs.WriteStream;
+  private fileWriteEnabled: boolean = false;
+  private logFilePath?: string;  // Store the resolved log file path
+
   constructor(config: Partial<LoggerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -74,6 +91,11 @@ class Logger {
    */
   configure(config: Partial<LoggerConfig>): void {
     this.config = { ...this.config, ...config };
+
+    // Initialize file logging if logFile is set
+    if (config.logFile) {
+      this.initializeFileLogging();
+    }
   }
   
   /**
@@ -119,14 +141,31 @@ class Logger {
     if (level < this.config.level) {
       return;
     }
-    
-    // Format the message
+
+    // Format the message (with colors for console)
     const formattedMessage = this.formatMessage(message, level, context);
-    
-    // Send to destination
+
+    // ERROR level: ALWAYS goes to console, regardless of file logging
+    if (level === LogLevel.ERROR) {
+      this.logToConsole(formattedMessage, level);
+
+      // Also write to file if enabled
+      if (this.fileWriteEnabled && this.logFilePath) {
+        const cleanMessage = stripAnsi(formattedMessage);
+        this.writeToFile(cleanMessage);
+      }
+      return;
+    }
+
+    // Non-ERROR levels: Use custom destination, file, or console
     if (this.config.destination) {
       this.config.destination(formattedMessage, level);
+    } else if (this.fileWriteEnabled && this.logFilePath) {
+      // Write to file instead of console (keeps console clean)
+      const cleanMessage = stripAnsi(formattedMessage);
+      this.writeToFile(cleanMessage);
     } else {
+      // Fall back to console
       this.logToConsole(formattedMessage, level);
     }
   }
@@ -234,24 +273,97 @@ class Logger {
         return LogLevel.INFO;
     }
   }
+
+  /**
+   * Initialize file logging
+   * Uses synchronous file operations to ensure reliable writes
+   */
+  private initializeFileLogging(): void {
+    if (!this.config.logFile) {
+      return;
+    }
+
+    try {
+      // Validate and normalize path
+      const logPath = path.resolve(this.config.logFile);
+
+      // Ensure parent directory exists
+      const logDir = path.dirname(logPath);
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+
+      // Store the resolved path for synchronous writes
+      this.logFilePath = logPath;
+      this.fileWriteEnabled = true;
+
+      // Write initialization marker
+      this.writeToFile(`\n=== Logger initialized at ${new Date().toISOString()} ===\n`);
+
+    } catch (error: any) {
+      this.fileWriteEnabled = false;
+      this.logFilePath = undefined;
+      console.warn(`[Logger] Could not initialize file logging: ${error.message}`);
+    }
+  }
+
+  /**
+   * Write a message to the log file using synchronous writes
+   */
+  private writeToFile(message: string): void {
+    if (!this.logFilePath || !this.fileWriteEnabled) {
+      return;
+    }
+
+    try {
+      // Use appendFileSync for guaranteed synchronous write to disk
+      fs.appendFileSync(this.logFilePath, message + '\n', 'utf8');
+    } catch (error: any) {
+      this.fileWriteEnabled = false;
+      console.warn(`[Logger] File write failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Close the logger and clean up resources
+   * Note: With synchronous writes, no cleanup is needed, but we disable further writes
+   */
+  public close(): void {
+    this.fileWriteEnabled = false;
+    this.logFilePath = undefined;
+    this.fileStream = undefined;  // Clean up any stream reference
+  }
 }
 
 // Create singleton logger instance
 export const logger = new Logger();
 
-// Configure logger based on environment
-// Security: A05:2021 - Security Misconfiguration
-// In production, force ERROR level to prevent debug information disclosure
-if (process.env.NODE_ENV === 'production') {
-  logger.setLevel(LogLevel.ERROR);
-} else if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
-  logger.setLevel(LogLevel.DEBUG);
-} else if (process.env.VERBOSE === 'true') {
-  logger.configure({ verbose: true });
-} else if (process.env.LOG_LEVEL) {
-  const level = parseInt(process.env.LOG_LEVEL, 10);
-  if (!isNaN(level) && level >= LogLevel.DEBUG && level <= LogLevel.SILENT) {
-    logger.setLevel(level as LogLevel);
+/**
+ * Configure logger from environment variables
+ * This should be called after environment variables are loaded (e.g., after dotenv.config())
+ */
+export function configureLoggerFromEnv(): void {
+  // Security: A05:2021 - Security Misconfiguration
+  // In production, force ERROR level to prevent debug information disclosure
+  if (process.env.NODE_ENV === 'production') {
+    logger.setLevel(LogLevel.ERROR);
+  } else if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+    logger.setLevel(LogLevel.DEBUG);
+  } else if (process.env.VERBOSE === 'true') {
+    logger.configure({ verbose: true });
+  } else if (process.env.LOG_LEVEL) {
+    const level = parseInt(process.env.LOG_LEVEL, 10);
+    if (!isNaN(level) && level >= LogLevel.DEBUG && level <= LogLevel.SILENT) {
+      logger.setLevel(level as LogLevel);
+    }
+  }
+
+  // Configure file logging
+  if (process.env.LOG_FILE && process.env.LOG_FILE.trim() !== '') {
+    logger.configure({
+      logFile: process.env.LOG_FILE.trim(),
+      enableFileLogging: true
+    });
   }
 }
 

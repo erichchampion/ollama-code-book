@@ -3,6 +3,12 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 describe('StreamingToolOrchestrator', () => {
   let StreamingToolOrchestrator;
@@ -95,6 +101,15 @@ describe('StreamingToolOrchestrator', () => {
 
     // Verify orchestrator still works
     expect(typeof orchestrator.executeWithStreaming).toBe('function');
+  });
+
+  it('should use softer injection for security analysis so fix/apply can follow', () => {
+    // Regression: security analysis result must allow follow-up filesystem writes when user asked to fix/apply
+    const sourcePath = path.resolve(__dirname, '../../../src/tools/streaming-orchestrator.ts');
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    expect(source).not.toMatch(/Do NOT call any more tools - just summarize/);
+    expect(source).toMatch(/fix or apply these issues/);
+    expect(source).toMatch(/operation='write' to apply the changes/);
   });
 });
 

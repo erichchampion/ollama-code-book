@@ -49,6 +49,7 @@ import { registerMCPClientCommands } from './mcp-client-commands.js';
 import { registerIDECommands } from './ide-commands.js';
 import { registerFileOperationCommands } from './file-operations.js';
 import { registerAnalysisCommands } from './analysis-commands.js';
+import { registerProviderCommands } from './provider-commands.js';
 
 /**
  * Register all commands
@@ -123,6 +124,9 @@ export function registerCommands(): void {
 
   // Register analysis commands
   registerAnalysisCommands();
+
+  // Register provider commands (llama.cpp, Ollama, etc.)
+  registerProviderCommands();
 
   // Register tool system command - temporarily disabled due to import issues
   // commandRegistry.register(toolCommand);

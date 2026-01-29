@@ -13,6 +13,7 @@ export { OllamaProvider } from './ollama-provider.js';
 export { OpenAIProvider } from './openai-provider.js';
 export { AnthropicProvider } from './anthropic-provider.js';
 export { GoogleProvider } from './google-provider.js';
+export { LlamaCppProvider } from './llamacpp-provider.js';
 
 // Advanced features
 export { LocalFineTuningManager, CustomLocalProvider } from './local-fine-tuning.js';
@@ -35,6 +36,7 @@ import { OllamaProvider } from './ollama-provider.js';
 import { OpenAIProvider } from './openai-provider.js';
 import { AnthropicProvider } from './anthropic-provider.js';
 import { GoogleProvider, GoogleConfig } from './google-provider.js';
+import { LlamaCppProvider, LlamaCppProviderConfig } from './llamacpp-provider.js';
 import { CustomLocalProvider } from './local-fine-tuning.js';
 
 /**
@@ -56,6 +58,10 @@ export function createProvider(type: string, config: ProviderConfig): BaseAIProv
         ...config,
         apiKey: config.apiKey
       } as GoogleConfig);
+    case 'llamacpp':
+    case 'llama.cpp':
+    case 'llama-cpp':
+      return new LlamaCppProvider(config as LlamaCppProviderConfig);
     case 'custom-local':
       return new CustomLocalProvider(config);
     default:
@@ -67,7 +73,7 @@ export function createProvider(type: string, config: ProviderConfig): BaseAIProv
  * Get list of available provider types
  */
 export function getAvailableProviderTypes(): string[] {
-  return ['ollama', 'openai', 'anthropic', 'google', 'custom-local'];
+  return ['ollama', 'openai', 'anthropic', 'google', 'llamacpp', 'custom-local'];
 }
 
 /**
@@ -90,6 +96,11 @@ export function validateProviderConfig(type: string, config: ProviderConfig): bo
     case 'google':
       // Google requires API key
       return !!(config.apiKey || process.env.GOOGLE_API_KEY);
+    case 'llamacpp':
+    case 'llama.cpp':
+    case 'llama-cpp':
+      // llama.cpp requires baseUrl OR modelPath (for auto-start)
+      return !!(config.baseUrl || (config as LlamaCppProviderConfig).modelPath);
     case 'custom-local':
       // Custom local provider is always valid
       return true;

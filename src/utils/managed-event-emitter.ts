@@ -27,8 +27,9 @@ export interface ManagedEventEmitterOptions {
  * Enhanced EventEmitter with automatic cleanup and monitoring
  */
 export class ManagedEventEmitter extends EventEmitter {
-  private static readonly instances = new WeakSet<ManagedEventEmitter>();
+  private static readonly instances = new Set<WeakRef<ManagedEventEmitter>>();
   private static totalInstances = 0;
+  private static cleanupHandlerRegistered = false;
 
   private readonly options: Required<ManagedEventEmitterOptions>;
   private readonly listenerRegistry = new Map<string, Set<Function>>();
@@ -59,8 +60,13 @@ export class ManagedEventEmitter extends EventEmitter {
     this.setMaxListeners(this.options.maxListeners);
 
     // Register this instance for global cleanup tracking
-    ManagedEventEmitter.instances.add(this);
+    ManagedEventEmitter.instances.add(new WeakRef(this));
     ManagedEventEmitter.totalInstances++;
+
+    // Register global cleanup handler once
+    if (!ManagedEventEmitter.cleanupHandlerRegistered) {
+      ManagedEventEmitter.registerGlobalCleanup();
+    }
 
     // Set up automatic cleanup detection
     if (this.options.enableCleanupTracking) {
@@ -267,12 +273,9 @@ export class ManagedEventEmitter extends EventEmitter {
   }
 
   private setupCleanupTracking(): void {
-    // Track process exit to warn about uncleaned resources
-    process.once('exit', () => {
-      if (!this.destroyed && this.metrics.totalListeners > 0) {
-        console.warn(`[ManagedEventEmitter] EventEmitter not properly destroyed before exit: ${this.metrics.totalListeners} listeners still attached`);
-      }
-    });
+    // Cleanup tracking is now handled globally via registerGlobalCleanup()
+    // Individual instances no longer need to warn on exit since they are
+    // automatically cleaned up by the global handler
   }
 
   private setupMemoryLeakDetection(): void {
@@ -287,6 +290,61 @@ export class ManagedEventEmitter extends EventEmitter {
     // Clean up the check when destroyed
     this.once('destroyed', () => {
       this.clearManagedInterval(checkInterval);
+    });
+  }
+
+  /**
+   * Register global cleanup handler to destroy all instances on process exit
+   */
+  private static registerGlobalCleanup(): void {
+    if (ManagedEventEmitter.cleanupHandlerRegistered) {
+      return;
+    }
+
+    ManagedEventEmitter.cleanupHandlerRegistered = true;
+
+    // Use beforeExit to ensure cleanup happens before individual exit handlers
+    process.on('beforeExit', () => {
+      // Clean up dead references first
+      const deadRefs = new Set<WeakRef<ManagedEventEmitter>>();
+
+      for (const ref of ManagedEventEmitter.instances) {
+        const instance = ref.deref();
+        if (!instance) {
+          deadRefs.add(ref);
+        } else if (!instance.isDestroyed()) {
+          // Silently destroy the instance without warnings
+          try {
+            instance.destroyed = true;
+
+            // Clean up all timers
+            for (const timer of instance.timerRegistry) {
+              clearTimeout(timer);
+            }
+            instance.timerRegistry.clear();
+
+            for (const timer of instance.intervalRegistry) {
+              clearInterval(timer);
+            }
+            instance.intervalRegistry.clear();
+
+            // Remove all listeners if auto-cleanup is enabled
+            if (instance.options.autoCleanupOnDestroy) {
+              instance.removeAllListeners();
+            }
+
+            // Clear tracking
+            instance.listenerRegistry.clear();
+          } catch (error) {
+            // Silently ignore cleanup errors during process exit
+          }
+        }
+      }
+
+      // Remove dead references
+      for (const ref of deadRefs) {
+        ManagedEventEmitter.instances.delete(ref);
+      }
     });
   }
 

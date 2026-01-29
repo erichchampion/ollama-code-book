@@ -40,11 +40,11 @@ import { getMemoryUsageMB } from '../utils/memory.js';
 export async function initializeLazyLoading(): Promise<void> {
   const { getLazyLoader } = await import('../core/services.js');
   const lazyLoader = await getLazyLoader();
-  // Register AI system
+  // Register AI system (basic client only - no project context)
   (lazyLoader as any).register('ai', async () => {
-    logger.debug('Initializing AI system...');
-    const { initAI } = await import('../ai/index.js');
-    await initAI();
+    logger.debug('Initializing basic AI client...');
+    const { initAIBasic } = await import('../ai/index.js');
+    await initAIBasic();
     return true;
   });
 

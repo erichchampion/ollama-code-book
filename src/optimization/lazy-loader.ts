@@ -107,10 +107,10 @@ export class LazyLoader {
  */
 export const CommandRequirements = {
   // Commands that don't need AI initialization
-  BASIC: ['help', 'version', 'commands', 'config-show', 'config-set', 'config-get', 'list-models'],
+  BASIC: ['help', 'version', 'commands', 'config-show', 'config-set', 'config-get'],
 
   // Commands that need AI but not project context
-  AI_ONLY: [] as string[],
+  AI_ONLY: ['list-models', 'pull-model'] as string[],
 
   // Commands that need project context
   PROJECT_AWARE: ['ask', 'explain', 'generate', 'fix', 'git-status', 'git-commit', 'search', 'refactor-analyze'],
