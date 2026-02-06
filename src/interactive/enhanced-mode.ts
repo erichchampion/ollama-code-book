@@ -26,6 +26,7 @@ import { registerCommands } from '../commands/register.js';
 import { EXIT_COMMANDS } from '../constants.js';
 import { createSpinner } from '../utils/spinner.js';
 import { AI_CONSTANTS, DELAY_CONSTANTS, THRESHOLD_CONSTANTS } from '../config/constants.js';
+import { formatPlanForTerminal, formatPlanResults } from './plan-display.js';
 
 export interface EnhancedModeOptions {
   autoApprove?: boolean;
@@ -1749,19 +1750,9 @@ ${session.results.map((result, index) =>
   }
 
   private displayTaskPlan(plan: any): void {
-    console.log(`
-📋 Task Plan: ${plan.title}
-
-Description: ${plan.description}
-Estimated Duration: ${plan.estimatedDuration} minutes
-Complexity: ${plan.metadata.complexity}
-Confidence: ${(plan.metadata.confidence * 100).toFixed(1)}%
-
-Tasks:
-${plan.tasks.map((task: any, index: number) =>
-  `${index + 1}. [${task.priority}] ${task.title}\n   ${task.description}`
-).join('\n')}
-`);
+    const formatted = formatPlanForTerminal(plan);
+    this.terminal.info('\n📋 Task Plan:\n');
+    this.terminal.info(formatted);
   }
 
   private displayResponse(response: string, intentType: string): void {
@@ -1876,10 +1867,10 @@ ${plan.tasks.map((task: any, index: number) =>
    */
   private displayPlanResults(plan: any): void {
     logger.debug('displayPlanResults called with plan:', {
-      hasTitle: !!plan.title,
-      taskCount: plan.tasks?.length,
-      completedCount: plan.tasks?.filter((t: any) => t.status === 'completed').length,
-      sampleTaskResults: plan.tasks?.slice(0, 2).map((t: any) => ({
+      hasTitle: !!plan?.title,
+      taskCount: plan?.tasks?.length,
+      completedCount: plan?.tasks?.filter((t: any) => t.status === 'completed').length,
+      sampleTaskResults: plan?.tasks?.slice(0, 2).map((t: any) => ({
         title: t.title,
         status: t.status,
         hasResult: !!t.result,
@@ -1888,36 +1879,7 @@ ${plan.tasks.map((task: any, index: number) =>
     });
 
     this.terminal.info('\n📊 Task Plan Results:\n');
-
-    const completedTasks = plan.tasks.filter((t: any) => t.status === 'completed');
-    const failedTasks = plan.tasks.filter((t: any) => t.status === 'failed');
-
-    if (completedTasks.length > 0) {
-      this.terminal.success(`✅ Completed ${completedTasks.length}/${plan.tasks.length} tasks:\n`);
-
-      for (const task of completedTasks) {
-        this.terminal.info(`📋 **${task.title}**`);
-        if (task.result) {
-          // Format and display the task result
-          const result = typeof task.result === 'string' ? task.result : JSON.stringify(task.result, null, 2);
-          this.terminal.info(`${result}\n`);
-        }
-      }
-    }
-
-    if (failedTasks.length > 0) {
-      this.terminal.error(`❌ Failed ${failedTasks.length} tasks:\n`);
-      for (const task of failedTasks) {
-        this.terminal.error(`- ${task.title}: ${task.error || 'Unknown error'}`);
-      }
-    }
-
-    // Show execution summary
-    const duration = plan.completed ?
-      ((new Date(plan.completed).getTime() - new Date(plan.started).getTime()) / (1000 * 60)).toFixed(1) :
-      'N/A';
-
-    this.terminal.info(`\n⏱️  Execution completed in ${duration} minutes`);
+    this.terminal.info(formatPlanResults(plan));
   }
 
   private async cleanup(): Promise<void> {

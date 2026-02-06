@@ -19,14 +19,14 @@ import { globToRegex } from '../utils/regex-cache.js';
 export class FileSystemTool extends BaseTool {
   metadata: ToolMetadata = {
     name: 'filesystem',
-    description: 'REQUIRED tool for ALL file creation, modification, and existence checking. Use this tool to create code files, configuration files, and any text files. NEVER use execution tool with echo/cat/printf commands to create files. Use "write" operation to create new files or update existing files with any content length. Use "exists" to check if a file or directory exists. Use "read" to get file contents, "create" for directories, "list" to browse directories. Examples: create server.js, create README.md, create package.json - ALL use this tool with operation="write". To check if a file exists after creation, use operation="exists".',
+    description: 'CRITICAL: Use this tool for ALL file operations. For informational queries: Use operation="list" with path="." to list files when user asks "What files are in this project?", "What files are here?", "List files", or "What files are in the current directory?". Use operation="read" with path="filename" when user asks "Show me the contents of X", "Read file X", or "What\'s in file X?". For file creation: Use operation="write" with path and content to create/update files. NEVER use execution tool with echo/cat/printf to create files. Use operation="exists" to check if a file exists. Use operation="create" for directories. Examples: "What files are here?" use operation="list" path=".", "Show me math.js" use operation="read" path="math.js", "Create server.js" use operation="write" path="server.js" with content parameter.',
     category: 'core',
     version: '1.0.0',
     parameters: [
       {
         name: 'operation',
         type: 'string',
-        description: 'The file operation to perform: "write" = create/update FILE with content (REQUIRED content parameter), "create" = make empty DIRECTORY (no content), "read" = get file contents, "list" = browse directory, "delete" = remove file/dir, "search" = find files, "exists" = check if path exists. To create a code file like users.js, use operation="write" with content parameter.',
+        description: 'The file operation to perform. CRITICAL: Use "list" with path="." when user asks about files in project/current directory. Use "read" with path="filename" when user asks to see/show/read file contents. Use "write" = create/update FILE with content (REQUIRED content parameter), "create" = make empty DIRECTORY, "delete" = remove file/dir, "search" = find files, "exists" = check if path exists.',
         required: true,
         enum: ['read', 'write', 'list', 'create', 'delete', 'search', 'exists'],
         validation: (value) => ['read', 'write', 'list', 'create', 'delete', 'search', 'exists'].includes(value)
@@ -34,7 +34,7 @@ export class FileSystemTool extends BaseTool {
       {
         name: 'path',
         type: 'string',
-        description: 'The file or directory path',
+        description: 'The file or directory path. CRITICAL: Use "." (current directory) when user asks about files "in this project", "in the current directory", "here", or "in the project". Use specific filename like "math.js" when user asks to read/show a specific file. Examples: For "What files are here?" use path=".", for "Show me math.js" use path="math.js".',
         required: true
       },
       {

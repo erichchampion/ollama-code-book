@@ -5,6 +5,7 @@
  */
 
 import { OllamaClient, OllamaToolCall, OllamaTool } from '../ai/ollama-client.js';
+import type { TurnResult } from '../interactive/types.js';
 import { ToolRegistry, ToolExecutionContext, ToolResult } from './types.js';
 import { OllamaToolAdapter } from './ollama-adapter.js';
 import { logger } from '../utils/logger.js';
@@ -14,6 +15,7 @@ import { promptForApproval, ApprovalCache } from '../utils/approval-prompt.js';
 import { truncateForLog, truncateForContext } from '../utils/text-utils.js';
 import { safeParse } from '../utils/safe-json.js';
 import { isDebugMode } from '../utils/debug.js';
+import { shouldPromptForPlanApproval, requestPlanApproval } from '../interactive/plan-approval.js';
 
 export interface Terminal {
   write(text: string): void;
@@ -29,6 +31,8 @@ export interface StreamingToolOrchestratorConfig {
   toolTimeout: number;
   requireApprovalForCategories?: string[];
   skipUnapprovedTools?: boolean;
+  /** When true, prompt user to approve task plan before execute (skipped in E2E/non-interactive) */
+  requirePlanApproval?: boolean;
 }
 
 interface CachedToolResult {
@@ -47,6 +51,7 @@ export class StreamingToolOrchestrator {
   private lastAttemptedToolSignature: string = ''; // Track the last attempted tool call signature (including failed ones)
   private consecutiveSuccessfulDuplicates: number = 0; // Track consecutive successful duplicate calls
   private blockedToolSignatures: Set<string> = new Set(); // Tool signatures to block after hitting duplicate limit
+  private approvedPlanIds: Set<string> = new Set(); // Plan IDs approved by user for execution (when requirePlanApproval)
   private static readonly MAX_TOOL_RESULTS = TOOL_LIMITS.MAX_TOOL_RESULTS_CACHE;
   private static readonly MAX_FAILURE_COUNT = 2; // Max times to allow same failure
   private static readonly RAPID_DUPLICATE_TTL = 3000; // 3 seconds - block rapid duplicates
@@ -77,8 +82,25 @@ export class StreamingToolOrchestrator {
     text: string
   ): void {
     try {
+      const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+      
       if (this.terminal && typeof this.terminal[method] === 'function') {
         this.terminal[method](text);
+        // In E2E mode, ensure messages are flushed by writing newline if needed
+        // This helps test helpers capture tool execution messages and warnings
+        if (e2eMode) {
+          if (method === 'info' && text.includes('🔧')) {
+            // Tool execution messages - ensure they're on their own line for better parsing
+            if (!text.endsWith('\n')) {
+              this.terminal[method]('\n');
+            }
+          } else if (method === 'warn' || method === 'error') {
+            // Warnings and errors - ensure they end with newline for better parsing in E2E tests
+            if (!text.endsWith('\n')) {
+              this.terminal[method]('\n');
+            }
+          }
+        }
       } else {
         const consoleMethods = {
           info: console.log,
@@ -105,6 +127,7 @@ export class StreamingToolOrchestrator {
       toolTimeout: TOOL_ORCHESTRATION_DEFAULTS.TOOL_TIMEOUT,
       requireApprovalForCategories: [...TOOL_ORCHESTRATION_DEFAULTS.APPROVAL_REQUIRED_CATEGORIES],
       skipUnapprovedTools: TOOL_ORCHESTRATION_DEFAULTS.SKIP_UNAPPROVED_TOOLS,
+      requirePlanApproval: false,
       ...config
     };
   }
@@ -122,10 +145,10 @@ export class StreamingToolOrchestrator {
       categories?: string[];
       model?: string;
     }
-  ): Promise<void> {
+  ): Promise<TurnResult> {
     if (!this.config.enableToolCalling) {
       this.safeTerminalCall('warn', 'Tool calling is disabled');
-      return;
+      return { turnComplete: true };
     }
 
     // Get available tools
@@ -145,8 +168,15 @@ export class StreamingToolOrchestrator {
     logger.info('Starting streaming tool execution with history', {
       historyLength: conversationHistory.length,
       toolCount: tools.length,
-      model: options?.model
+      model: options?.model,
+      toolNames: tools.map(t => t.function.name).slice(0, 5) // Log first 5 tool names for debugging
     });
+    
+    // CRITICAL DEBUG: In E2E mode, log tool availability to help diagnose test failures
+    const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+    if (e2eMode && tools.length > 0) {
+      this.safeTerminalCall('info', `[DEBUG] Available tools: ${tools.map(t => t.function.name).join(', ')}\n`);
+    }
 
     // DEBUG: Log tools being sent
     logger.debug('Tools being sent to model:', {
@@ -165,8 +195,25 @@ export class StreamingToolOrchestrator {
     });
 
     try {
-      const { generateToolCallingSystemPrompt } = await import('../ai/prompts.js');
-      const systemPrompt = generateToolCallingSystemPrompt();
+      const { generateToolCallingSystemPrompt, enhanceSystemPromptWithPlanning } = await import('../ai/prompts.js');
+      let systemPrompt = generateToolCallingSystemPrompt();
+      
+      // Enhance prompt with planning suggestions if the request is complex
+      // Extract the latest user message from conversation history
+      const latestUserMessage = conversationHistory
+        .slice()
+        .reverse()
+        .find(msg => msg.role === 'user');
+      
+      if (latestUserMessage?.content) {
+        const userRequest = typeof latestUserMessage.content === 'string' 
+          ? latestUserMessage.content 
+          : String(latestUserMessage.content);
+        systemPrompt = enhanceSystemPromptWithPlanning(systemPrompt, userRequest);
+      }
+
+      /** Result for this turn: turn complete (show prompt again) or session should end. */
+      let turnResult: TurnResult = { turnComplete: true };
 
       // FIXED: Add multi-turn loop to allow AI to recover from tool errors
       let conversationComplete = false;
@@ -178,6 +225,7 @@ export class StreamingToolOrchestrator {
       let consecutiveTurnsWithOnlyToolCalls = 0; // Track turns with only tool calls and no text
       const maxConsecutiveTurnsWithOnlyToolCalls = 2; // Force answer after 2 turns of only tool calls
       let maxToolCallsRecoveryTurnUsed = false; // One recovery turn when per-turn tool limit is hit
+      let finalAnswerRequested = false; // Track if we've already requested a final answer to prevent loops
 
       while (!conversationComplete && turnCount < maxTurns) {
         turnCount++;
@@ -213,7 +261,46 @@ export class StreamingToolOrchestrator {
         const maxParseAttempts = STREAMING_CONSTANTS.MAX_STREAMING_PARSE_ATTEMPTS;
         let maxToolCallsExceeded = false; // Flag to track if tool limit was exceeded
 
-        await this.ollamaClient.completeStreamWithTools(
+        // CRITICAL FIX: If we had tool calls in previous turn and model didn't respond,
+        // add timeout to prevent hanging. This is especially important for E2E tests.
+        const MODEL_RESPONSE_TIMEOUT = 30000; // 30 seconds for model to respond after tool execution
+        const hasPreviousToolCalls = turnCount > 1 && conversationHistory.some(
+          (msg: any) => msg.tool_calls && msg.tool_calls.length > 0
+        );
+        
+        let streamCompleted = false;
+        const streamTimeout = hasPreviousToolCalls ? setTimeout(() => {
+          if (!streamCompleted) {
+            logger.warn('Model did not respond after tool execution within timeout, forcing turn completion', {
+              turnCount,
+              timeoutMs: MODEL_RESPONSE_TIMEOUT,
+              hasPreviousToolCalls
+            });
+            // Force turn completion if model doesn't respond
+            conversationComplete = true;
+          }
+        }, MODEL_RESPONSE_TIMEOUT) : null;
+
+        try {
+          // CRITICAL DEBUG: In E2E mode, log available tools before API call
+          const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+          if (e2eMode && tools.length > 0) {
+            const toolNames = tools.map(t => t.function?.name || 'unknown').join(', ');
+            const debugMsg = `[DEBUG E2E] Available tools for this turn: ${toolNames}\n`;
+            this.safeTerminalCall('info', debugMsg);
+            console.error(debugMsg); // Backup
+          }
+          
+          // CRITICAL DEBUG: Log that we're about to call Ollama API
+          if (e2eMode) {
+            const lastUserMsg = conversationHistory.slice().reverse().find(m => m.role === 'user');
+            const userQuery = lastUserMsg?.content || 'unknown';
+            const debugMsg = `[DEBUG E2E] About to call Ollama API with query: "${userQuery.substring(0, 50)}..."\n`;
+            this.safeTerminalCall('info', debugMsg);
+            console.error(debugMsg); // Backup
+          }
+          
+          await this.ollamaClient.completeStreamWithTools(
           conversationHistory,
           tools,
           {
@@ -232,6 +319,19 @@ export class StreamingToolOrchestrator {
                 // Suppress JSON output, will show as formatted tool execution instead
                 assistantMessage.content += chunk;
                 return;
+              }
+
+              // CRITICAL: In E2E mode, log when we receive content chunks to help diagnose test failures
+              const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+              if (e2eMode && chunk.trim().length > 0) {
+                // Log ALL content chunks in E2E mode to see what model is responding with
+                const debugMsg = `[DEBUG E2E] Content chunk received (length: ${chunk.length}): "${chunk.substring(0, 100)}${chunk.length > 100 ? '...' : ''}"\n`;
+                this.safeTerminalCall('info', debugMsg);
+                console.error(debugMsg); // Backup to ensure it's captured
+              } else if (e2eMode) {
+                // Log even empty/whitespace chunks to see if model is sending anything
+                const debugMsg = `[DEBUG E2E] Empty/whitespace chunk received (length: ${chunk.length})\n`;
+                console.error(debugMsg);
               }
 
               this.safeTerminalWrite(chunk);
@@ -393,6 +493,12 @@ export class StreamingToolOrchestrator {
                 toolName: toolCall.function.name,
                 count: totalToolCalls
               });
+              
+              // CRITICAL DEBUG: In E2E mode, log tool calls to help diagnose test failures
+              const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+              if (e2eMode) {
+                this.safeTerminalCall('info', `[DEBUG] Tool call received: ${toolCall.function.name}\n`);
+              }
 
               if (totalToolCalls > this.config.maxToolsPerRequest) {
                 const errorMsg = `Exceeded maximum tool calls (${this.config.maxToolsPerRequest})`;
@@ -411,26 +517,108 @@ export class StreamingToolOrchestrator {
             },
 
             onComplete: () => {
+              streamCompleted = true;
+              if (streamTimeout) {
+                clearTimeout(streamTimeout);
+              }
+              const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
               logger.info('✅ Stream completed for turn', {
                 turnCount,
                 toolCallsThisTurn: turnToolCalls.length,
                 assistantContentLength: assistantMessage.content?.length || 0,
                 hasContent: !!assistantMessage.content?.trim()
               });
+              
+              // CRITICAL DEBUG: In E2E mode, log stream completion details
+              if (e2eMode) {
+                const debugMsg = `[DEBUG E2E] Stream completed - Turn: ${turnCount}, Tool calls: ${turnToolCalls.length}, Content length: ${assistantMessage.content?.length || 0}\n`;
+                this.safeTerminalCall('info', debugMsg);
+                console.error(debugMsg); // Backup to ensure it's captured
+              }
             },
 
             onError: (error: Error) => {
+              streamCompleted = true;
+              if (streamTimeout) {
+                clearTimeout(streamTimeout);
+              }
+              const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+              
+              // CRITICAL DEBUG: In E2E mode, always log stream errors
+              if (e2eMode) {
+                const debugMsg = `[DEBUG E2E] Stream error occurred: ${error.message}\n[DEBUG E2E] Error name: ${error.name}\n[DEBUG E2E] Error stack: ${error.stack?.substring(0, 200)}\n`;
+                this.safeTerminalCall('error', debugMsg);
+                console.error(debugMsg); // Backup
+              }
+              
               logger.error('Streaming tool execution error', error);
               this.safeTerminalCall('error', `Error: ${error.message}`);
+              // If we had previous tool calls and stream errored, force completion to prevent hanging
+              if (hasPreviousToolCalls && !conversationComplete) {
+                logger.warn('Stream errored after tool execution, forcing turn completion', {
+                  turnCount,
+                  error: error.message
+                });
+                conversationComplete = true;
+              }
             }
           }
         );
+        } catch (error) {
+          streamCompleted = true;
+          if (streamTimeout) {
+            clearTimeout(streamTimeout);
+          }
+          // If stream failed and we had previous tool calls, force completion
+          if (hasPreviousToolCalls && !conversationComplete) {
+            logger.warn('Stream failed after tool execution, forcing turn completion', {
+              turnCount,
+              error: error instanceof Error ? error.message : String(error)
+            });
+            conversationComplete = true;
+          }
+          throw error;
+        } finally {
+          streamCompleted = true;
+          if (streamTimeout) {
+            clearTimeout(streamTimeout);
+          }
+        }
 
         // Wait for all synthetic tool calls to complete
         if (syntheticToolCallPromises.length > 0) {
           logger.debug(`Waiting for ${syntheticToolCallPromises.length} synthetic tool calls to complete`);
           await Promise.all(syntheticToolCallPromises);
           logger.debug('All synthetic tool calls completed');
+        }
+
+        // CRITICAL FIX: After stream completes, check if we had previous tool calls and model didn't respond
+        // If so, force completion immediately to prevent hanging. This is especially important for E2E tests.
+        // This handles the case where tools completed but model doesn't provide a text response.
+        if (hasPreviousToolCalls && turnToolCalls.length === 0) {
+          // We had tool calls in previous turn, but model didn't make new tool calls in this turn
+          // Check if model provided text content
+          const contentWithoutJson = assistantMessage.content
+            ?.replace(/\{[^}]*"name"[^}]*"arguments"[^}]*\}/g, '')
+            .trim();
+          const hasTextContent = contentWithoutJson && contentWithoutJson.length > 20;
+          
+          if (!hasTextContent) {
+            logger.warn('Model did not respond after tool execution (no tool calls, no text), forcing turn completion', {
+              turnCount,
+              hasPreviousToolCalls,
+              hasTextContent,
+              contentLength: assistantMessage.content?.length || 0
+            });
+            // Add assistant message to conversation history (even if empty) to maintain consistency
+            if (assistantMessage.content || Object.keys(assistantMessage).length > 1) {
+              conversationHistory.push(assistantMessage);
+            }
+            // Force turn completion - tool results were already provided, we can safely complete
+            conversationComplete = true;
+            // Break out of the loop immediately
+            break;
+          }
         }
 
         // If there were tool calls, add assistant message and tool results to conversation
@@ -450,14 +638,18 @@ export class StreamingToolOrchestrator {
           });
 
           // Track consecutive turns with only tool calls (no meaningful text)
+          // NOTE: We'll re-check this later after tool results are added, as text might
+          // be added after tool calls complete. Don't increment counter yet - wait until
+          // after we've checked for text content after tool execution completes.
           if (!hasTextContent) {
-            consecutiveTurnsWithOnlyToolCalls++;
-            logger.debug('Turn had only tool calls, no text content', {
+            logger.debug('Turn has tool calls, will check for text content after tool execution', {
               turnCount,
-              consecutiveTurnsWithOnlyToolCalls
+              initialHasTextContent: hasTextContent,
+              contentLength: assistantMessage.content?.length || 0
             });
+            // Don't increment counter yet - we'll check again after tool results are added
           } else {
-            // Reset counter if this turn had meaningful text
+            // Reset counter if this turn had meaningful text from the start
             consecutiveTurnsWithOnlyToolCalls = 0;
           }
 
@@ -680,92 +872,300 @@ export class StreamingToolOrchestrator {
             }
           }
 
-          // Check if tool call limit was exceeded during this turn
-          if (maxToolCallsExceeded) {
-            if (maxToolCallsRecoveryTurnUsed) {
-              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
-              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
-              conversationComplete = true;
-            } else {
-              logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, prompting for final answer`);
-              this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Requesting final answer...`);
-
-              conversationHistory.push({
-                role: 'system',
-                content: `You have reached the maximum number of tool calls for this turn (${this.config.maxToolsPerRequest}). Do NOT make any more tool calls. Provide your final answer to the user in plain text only. If you have already applied fixes to the codebase, summarize what you changed. If not, briefly state what was done and what the user should do next. No JSON, no further tool calls.`
-              });
-              maxToolCallsRecoveryTurnUsed = true;
-              conversationComplete = false;
-            }
-          } else if (consecutiveTurnsWithOnlyToolCalls >= maxConsecutiveTurnsWithOnlyToolCalls) {
-            logger.warn(`Too many consecutive turns with only tool calls (${consecutiveTurnsWithOnlyToolCalls}), forcing final answer`);
-            this.safeTerminalCall('warn', `⚠️  Multiple tool calls completed. Requesting final answer...`);
-
-            // Inject a strong system message forcing the AI to provide a text answer
-            conversationHistory.push({
-              role: 'system',
-              content: `You have called ${totalToolCalls} tools across ${turnCount} turns and received all the results. You have all the information you need. You MUST now provide your final answer to the user's question in plain text. DO NOT make any more tool calls. DO NOT output JSON. Analyze the tool results you received and provide a clear, text-based answer to the user's original question. Start your response immediately with the answer - no preamble, no JSON, just the answer.`
-            });
-
-            // Reset the counter
+          // CRITICAL FIX: After ALL tool results are added, re-check if model provided text content.
+          // Text might arrive AFTER tool execution completes via streaming, so we need to check again.
+          // This is the FINAL check before deciding whether to continue or complete the turn.
+          const finalContentCheck = assistantMessage.content
+            ?.replace(/\{[^}]*"name"[^}]*"arguments"[^}]*\}/g, '')
+            .trim();
+          const finalHasTextContent = finalContentCheck && finalContentCheck.length > 20;
+          
+          // CRITICAL: Check if model provided text content FIRST, before any other checks
+          // Use the final check we did above after tool results were added
+          // This ensures we complete immediately if model responded, rather than injecting
+          // system messages or continuing unnecessarily
+          // NOTE: Assistant message was already added to conversationHistory at line 572,
+          // so we don't need to add it again here
+          if (finalHasTextContent) {
+            // Model provided text - reset counter and complete turn
             consecutiveTurnsWithOnlyToolCalls = 0;
-
-            // Continue one more turn to get the final answer
-            conversationComplete = false;
-          } else if (this.consecutiveSuccessfulDuplicates >= StreamingToolOrchestrator.MAX_SUCCESSFUL_DUPLICATES) {
-            logger.warn(`Too many consecutive successful duplicate calls (${this.consecutiveSuccessfulDuplicates}), prompting for answer`);
-            this.safeTerminalCall('warn', `⚠️  Detected repeated successful duplicate tool calls. Prompting for final answer...`);
-
-            // Block this tool signature from being called again
-            this.blockedToolSignatures.add(this.lastToolSignature);
-            logger.debug(`Blocked tool signature: ${this.lastToolSignature}`);
-
-            // Inject a system message telling the LLM to provide an answer
-            conversationHistory.push({
-              role: 'system',
-              content: `You have called the same tool "${this.lastToolSignature.split(':')[0]}" ${this.consecutiveSuccessfulDuplicates} times with the same parameters and received the same results. The tool has already provided all the information it can. You must now analyze the results you received and provide your final answer to the user. Do NOT call this tool again - you already have all the data you need.`
+            finalAnswerRequested = false; // Reset flag since model responded
+            conversationComplete = true;
+            logger.debug('Model provided text content after tool calls, completing turn immediately', {
+              turnCount,
+              contentLength: assistantMessage.content?.length || 0,
+              contentWithoutJsonLength: finalContentCheck?.length || 0
             });
+            // Skip all other checks - we have text, so we're done
+          } else {
+            // No text content - FIRST check consecutive failures (highest priority)
+            // This must be checked before any other conditions to prevent infinite loops
+            if (consecutiveFailures >= maxConsecutiveFailures) {
+              logger.warn(`Too many consecutive tool failures (${consecutiveFailures}), ending conversation`);
+              this.safeTerminalCall('warn', `⚠️  Multiple consecutive tool failures detected. Ending conversation to prevent loops.`);
+              turnResult = { turnComplete: false, sessionShouldEnd: true, reason: 'consecutive_failures' };
+              conversationComplete = true;
+              // CRITICAL: Break immediately to preserve turnResult - don't check other conditions
+              break;
+            }
+            
+            // Then check if we already requested a final answer
+            // If so, force completion immediately to prevent loops
+            if (finalAnswerRequested) {
+              // We already requested a final answer but model didn't respond - force completion
+              logger.warn(`Final answer was requested but model didn't respond, forcing completion`);
+              conversationComplete = true;
+              // Skip all other checks - we've already given the AI a chance to respond
+            } else {
+              // Check if we had planning tool calls (which take longer)
+              // If planning completed but model didn't respond, force completion after reasonable wait
+              const hadPlanningCalls = turnToolCalls.some(tc => tc.function.name === 'planning');
+              
+              // Check if any tools failed this turn
+              const hadToolFailures = turnToolCalls.some(tc => {
+                const cached = this.toolResults.get(`${tc.function.name}:${JSON.stringify(tc.function.arguments)}`);
+                return cached && cached.result && !cached.result.success;
+              });
+              
+              // Update consecutiveTurnsWithOnlyToolCalls based on final check (only increment once!)
+              // CRITICAL: Don't increment if we've already requested a final answer
+              if (turnToolCalls.length > 0 && !finalAnswerRequested) {
+                // No text content but had tool calls - increment counter
+                consecutiveTurnsWithOnlyToolCalls++;
+                logger.debug('Turn had tool calls but no text content after execution', {
+                  turnCount,
+                  consecutiveTurnsWithOnlyToolCalls,
+                  hadToolFailures,
+                  contentLength: assistantMessage.content?.length || 0
+                });
+              }
+              
+              // Check planning calls and other conditions
+              // CRITICAL FIX: After planning tool results are added, continue the loop to give the model
+              // a chance to process the planning results. Only force completion if we've already given
+              // the model multiple chances (turnCount >= 3) or if planning failed.
+              if (hadPlanningCalls) {
+                const planningCalls = turnToolCalls.filter(tc => tc.function.name === 'planning');
+                const planningFailed = planningCalls.some(tc => {
+                  const cached = this.toolResults.get(`${tc.function.name}:${JSON.stringify(tc.function.arguments)}`);
+                  return cached && cached.result && !cached.result.success;
+                });
+                
+                if (planningFailed) {
+                  // Planning failed - complete turn
+                  logger.warn('Planning tool failed, completing turn', {
+                    turnCount,
+                    hadPlanningCalls,
+                    contentLength: assistantMessage.content?.length || 0
+                  });
+                  conversationComplete = true;
+                } else if (turnCount >= 3) {
+                  // Planning succeeded but model hasn't responded after 3+ turns - force completion
+                  logger.warn('Planning tool completed but model did not provide text response after multiple turns, forcing turn completion', {
+                    turnCount,
+                    hadPlanningCalls,
+                    contentLength: assistantMessage.content?.length || 0,
+                    toolCallsThisTurn: turnToolCalls.length
+                  });
+                  conversationComplete = true;
+                } else {
+                  // Planning succeeded - continue loop to let model process results
+                  logger.debug('Planning tool completed successfully, continuing conversation to allow model to process results', {
+                    turnCount,
+                    hadPlanningCalls,
+                    contentLength: assistantMessage.content?.length || 0
+                  });
+                  conversationComplete = false; // Continue loop
+                }
+              } else if (!hadPlanningCalls && maxToolCallsExceeded) {
+                // Check if tool call limit was exceeded during this turn
+                if (maxToolCallsRecoveryTurnUsed) {
+                  logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
+                  this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
+                  turnResult = { turnComplete: false, sessionShouldEnd: true, reason: 'max_tool_calls' };
+                  conversationComplete = true;
+                } else {
+                  logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, prompting for final answer`);
+                  this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Requesting final answer...`);
 
-            // Reset the counter
-            this.consecutiveSuccessfulDuplicates = 0;
-            this.lastToolSignature = '';
+                  conversationHistory.push({
+                    role: 'system',
+                    content: `You have reached the maximum number of tool calls for this turn (${this.config.maxToolsPerRequest}). Do NOT make any more tool calls. Provide your final answer to the user in plain text only. If you have already applied fixes to the codebase, summarize what you changed. If not, briefly state what was done and what the user should do next. No JSON, no further tool calls.`
+                  });
+                  maxToolCallsRecoveryTurnUsed = true;
+                  conversationComplete = false;
+                }
+              } else if (!hadPlanningCalls && !hadToolFailures && consecutiveTurnsWithOnlyToolCalls >= maxConsecutiveTurnsWithOnlyToolCalls) {
+                // No text content AND too many consecutive tool-only turns (but not planning, and no failures)
+                // Only trigger this if tools succeeded - if tools failed, let the model respond to the error
+                logger.warn(`Too many consecutive turns with only tool calls (${consecutiveTurnsWithOnlyToolCalls}), forcing final answer`);
+                this.safeTerminalCall('warn', `⚠️  Multiple tool calls completed. Requesting final answer...`);
 
-            // Continue one more turn to get the final answer
-            conversationComplete = false;
-          } else if (this.consecutiveDuplicates >= StreamingToolOrchestrator.MAX_CONSECUTIVE_DUPLICATES) {
-            logger.warn(`Too many consecutive duplicate calls (${this.consecutiveDuplicates}), prompting for answer`);
-            this.safeTerminalCall('warn', `⚠️  Detected repeated duplicate tool calls. Prompting for final answer...`);
+                // Inject a strong system message forcing the AI to provide a text answer
+                conversationHistory.push({
+                  role: 'system',
+                  content: `You have called ${totalToolCalls} tools across ${turnCount} turns and received all the results. You have all the information you need. You MUST now provide your final answer to the user's question in plain text. DO NOT make any more tool calls. DO NOT output JSON. Analyze the tool results you received and provide a clear, text-based answer to the user's original question. Start your response immediately with the answer - no preamble, no JSON, just the answer.`
+                });
 
-            // Inject a system message telling the LLM to provide an answer
-            conversationHistory.push({
-              role: 'system',
-              content: 'You have attempted to call the same tools multiple times, but the operations have already been completed successfully. You have all the information needed to answer the user\'s question. Please provide your final answer now based on the tool results you already received. Do not make any more tool calls.'
-            });
+                // Mark that we've requested a final answer
+                finalAnswerRequested = true;
+                // Reset the counter
+                consecutiveTurnsWithOnlyToolCalls = 0;
 
-            // Reset the counter
-            this.consecutiveDuplicates = 0;
+                // Continue one more turn to get the final answer
+                conversationComplete = false;
+              } else if (this.consecutiveSuccessfulDuplicates >= StreamingToolOrchestrator.MAX_SUCCESSFUL_DUPLICATES) {
+              // Model didn't provide text (we already checked above) - inject system message
+              logger.warn(`Too many consecutive successful duplicate calls (${this.consecutiveSuccessfulDuplicates}), prompting for answer`);
+                this.safeTerminalCall('warn', `⚠️  Detected repeated successful duplicate tool calls. Prompting for final answer...`);
 
-            // Continue one more turn to get the final answer
-            conversationComplete = false;
-          } else if (consecutiveFailures >= maxConsecutiveFailures) {
-            logger.warn(`Too many consecutive tool failures (${consecutiveFailures}), ending conversation`);
-            this.safeTerminalCall('warn', `⚠️  Multiple consecutive tool failures detected. Ending conversation to prevent loops.`);
+                // Block this tool signature from being called again
+                this.blockedToolSignatures.add(this.lastToolSignature);
+                logger.debug(`Blocked tool signature: ${this.lastToolSignature}`);
+
+                // Inject a system message telling the LLM to provide an answer
+                conversationHistory.push({
+                  role: 'system',
+                  content: `You have called the same tool "${this.lastToolSignature.split(':')[0]}" ${this.consecutiveSuccessfulDuplicates} times with the same parameters and received the same results. The tool has already provided all the information it can. You must now analyze the results you received and provide your final answer to the user. Do NOT call this tool again - you already have all the data you need.`
+                });
+
+                // Reset the counter
+                this.consecutiveSuccessfulDuplicates = 0;
+                this.lastToolSignature = '';
+
+                // Continue one more turn to get the final answer
+                conversationComplete = false;
+              } else if (this.consecutiveDuplicates >= StreamingToolOrchestrator.MAX_CONSECUTIVE_DUPLICATES) {
+              // Model didn't provide text (we already checked above) - inject system message
+              logger.warn(`Too many consecutive duplicate calls (${this.consecutiveDuplicates}), prompting for answer`);
+                this.safeTerminalCall('warn', `⚠️  Detected repeated duplicate tool calls. Prompting for final answer...`);
+
+                // Inject a system message telling the LLM to provide an answer
+                conversationHistory.push({
+                  role: 'system',
+                  content: 'You have attempted to call the same tools multiple times, but the operations have already been completed successfully. You have all the information needed to answer the user\'s question. Please provide your final answer now based on the tool results you already received. Do not make any more tool calls.'
+                });
+
+                // Reset the counter
+                this.consecutiveDuplicates = 0;
+
+                // Continue one more turn to get the final answer
+                conversationComplete = false;
+              } else {
+                // Continue the conversation - AI will get a chance to see the tool results and respond
+                logger.info('📝 Conversation will continue - AI will respond to tool results', {
+                  toolCallsThisTurn: turnToolCalls.length,
+                  turnCount,
+                  totalToolCalls,
+                  consecutiveTurnsWithOnlyToolCalls,
+                  hasTextContent
+                });
+                
+                // NOTE: The logic for determining conversationComplete is now handled above
+                // in the else block where we check for text content before checking consecutive turns.
+                // This ensures we complete immediately if model provided text, rather than
+                // continuing unnecessarily.
+              }
+            }
+          }
+        }
+        
+        // Handle case where there were no tool calls in this turn
+        if (turnToolCalls.length === 0) {
+          // No tool calls in this turn - check if model responded with text
+          const contentWithoutJson = assistantMessage.content
+            ?.replace(/\{[^}]*"name"[^}]*"arguments"[^}]*\}/g, '')
+            .trim();
+          const hasTextContent = contentWithoutJson && contentWithoutJson.length > 20;
+          
+          // CRITICAL FIX: If we had tool calls in previous turns but model didn't respond in this turn,
+          // force completion to prevent hanging. This handles the case where tools completed but
+          // model doesn't provide a text response in the follow-up turn.
+          if (turnCount >= 2 && !hasTextContent) {
+            // Check if there were tool calls in previous turns
+            const previousTurnHadToolCalls = conversationHistory.some(
+              (msg: any) => msg.tool_calls && msg.tool_calls.length > 0
+            );
+            
+            if (previousTurnHadToolCalls) {
+              logger.warn('Model did not respond after tool execution (no tool calls, no text in follow-up turn), forcing turn completion', {
+                turnCount,
+                previousTurnHadToolCalls,
+                hasTextContent,
+                contentLength: assistantMessage.content?.length || 0,
+                conversationHistoryLength: conversationHistory.length
+              });
+              // Add assistant message to conversation history even if empty
+              if (assistantMessage.content || Object.keys(assistantMessage).length > 1) {
+                conversationHistory.push(assistantMessage);
+              }
+              // Force turn completion - tool results were provided, model should have responded
+              conversationComplete = true;
+              break;
+            }
+          }
+          
+          // If model provided text content, add it to conversation history and complete turn
+          // Re-check content here as well to catch any text that arrived after initial check
+          const finalContentCheck = assistantMessage.content
+            ?.replace(/\{[^}]*"name"[^}]*"arguments"[^}]*\}/g, '')
+            .trim();
+          const finalHasTextContent = finalContentCheck && finalContentCheck.length > 20;
+          
+          if (finalHasTextContent) {
+            conversationHistory.push(assistantMessage);
+            conversationComplete = true;
+          } else if (assistantMessage.content && assistantMessage.content.trim().length > 0) {
+            // Even if content is short, add it and complete
+            conversationHistory.push(assistantMessage);
             conversationComplete = true;
           } else {
-            // Continue the conversation - AI will get a chance to see the tool results and respond
-            logger.info('📝 Conversation will continue - AI will respond to tool results', {
-              toolCallsThisTurn: turnToolCalls.length,
-              turnCount,
-              totalToolCalls
-            });
-            conversationComplete = false;
+            // No content at all - check if we had previous tool calls
+            // If so, we should complete anyway (tool results were provided)
+            const hadPreviousToolCalls = conversationHistory.some(
+              (msg: any) => msg.tool_calls && msg.tool_calls.length > 0
+            );
+            if (hadPreviousToolCalls || turnCount >= 2) {
+              // Had tool calls or multiple turns - complete to prevent hanging
+              logger.debug('Completing turn with no text content (had tool calls or multiple turns)', {
+                turnCount,
+                hadPreviousToolCalls,
+                contentLength: assistantMessage.content?.length || 0
+              });
+              // Add empty message to maintain conversation structure
+              if (Object.keys(assistantMessage).length > 1 || assistantMessage.content) {
+                conversationHistory.push(assistantMessage);
+              }
+              conversationComplete = true;
+            } else {
+              // First turn with no content - this shouldn't happen, but complete anyway
+              conversationHistory.push(assistantMessage);
+              conversationComplete = true;
+              
+              // Check if we got an empty or meaningless response on first turn
+              const hasContent = assistantMessage.content && assistantMessage.content.trim().length > 0;
+              if (!hasContent && turnCount === 1) {
+                // Model gave no response on first turn - likely confused or unable to help
+                logger.warn('Model provided no response and no tool calls', {
+                  content: assistantMessage.content
+                });
+                this.safeTerminalCall('warn',
+                  '\nThe AI model did not provide a response. This may happen with complex or unclear requests.\n' +
+                  'Try:\n' +
+                  '  • Breaking down the request into smaller, specific tasks\n' +
+                  '  • Asking about one thing at a time\n' +
+                  '  • Rephrasing the question more specifically\n'
+                );
+              }
+            }
           }
-        } else {
+          
           // Check if tool call limit was exceeded (even though no tool calls were added)
           if (maxToolCallsExceeded) {
             if (maxToolCallsRecoveryTurnUsed) {
               logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, ending conversation`);
               this.safeTerminalCall('warn', `⚠️  Maximum tool calls limit reached. Ending conversation.`);
+              turnResult = { turnComplete: false, sessionShouldEnd: true, reason: 'max_tool_calls' };
               conversationComplete = true;
             } else {
               logger.warn(`Maximum tool calls (${this.config.maxToolsPerRequest}) exceeded, prompting for final answer`);
@@ -779,24 +1179,55 @@ export class StreamingToolOrchestrator {
               conversationComplete = false;
             }
           } else {
-            // No tool calls means conversation is complete
+            // No tool calls means conversation is complete (turn complete; session continues)
             conversationComplete = true;
           }
 
           // Check if we got an empty or meaningless response
           const hasContent = assistantMessage.content && assistantMessage.content.trim().length > 0;
-          if (!hasContent && turnCount === 1) {
-            // Model gave no response on first turn - likely confused or unable to help
+          const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+          
+          // CRITICAL: In E2E mode, always log when model doesn't make tool calls (regardless of query type)
+          if (e2eMode && turnToolCalls.length === 0 && tools.length > 0) {
+            const lastUserMessage = conversationHistory
+              .slice()
+              .reverse()
+              .find(m => m.role === 'user');
+            const userQuery = lastUserMessage?.content || 'unknown';
+            const contentPreview = (assistantMessage.content || '').substring(0, 200);
+            
+            // Always log in E2E mode to help diagnose test failures
+            // Use both safeTerminalCall and console.error to ensure output is captured
+            const debugMsg = `\n[DEBUG E2E] Model did not make tool calls\n` +
+              `[DEBUG E2E] User query: "${userQuery.substring(0, 100)}"\n` +
+              `[DEBUG E2E] Tools available: ${tools.length}\n` +
+              `[DEBUG E2E] Model response length: ${assistantMessage.content?.length || 0}\n` +
+              (assistantMessage.content && assistantMessage.content.trim().length > 0
+                ? `[DEBUG E2E] Model response content: "${contentPreview}${assistantMessage.content.length > 200 ? '...' : ''}"\n`
+                : `[DEBUG E2E] Model response content: (empty or whitespace only)\n`);
+            
+            this.safeTerminalCall('warn', debugMsg);
+            console.error(debugMsg); // Backup to ensure it's captured
+          }
+          
+          if (!hasContent && turnToolCalls.length === 0) {
+            // Model gave no response and no tool calls - this is a problem
             logger.warn('Model provided no response and no tool calls', {
-              content: assistantMessage.content
+              content: assistantMessage.content,
+              contentLength: assistantMessage.content?.length || 0,
+              toolCallsThisTurn: turnToolCalls.length,
+              toolsAvailable: tools.length
             });
-            this.safeTerminalCall('warn',
-              '\nThe AI model did not provide a response. This may happen with complex or unclear requests.\n' +
-              'Try:\n' +
-              '  • Breaking down the request into smaller, specific tasks\n' +
-              '  • Asking about one thing at a time\n' +
-              '  • Rephrasing the question more specifically'
-            );
+            
+            // In E2E mode, always show this warning to help diagnose test failures
+            const warningMsg = e2eMode 
+              ? `\n⚠️  Model provided no response and no tool calls (tools were available: ${tools.length}). This may indicate the model is not following instructions.\n`
+              : '\nThe AI model did not provide a response. This may happen with complex or unclear requests.\n' +
+                'Try:\n' +
+                '  • Breaking down the request into smaller, specific tasks\n' +
+                '  • Asking about one thing at a time\n' +
+                '  • Rephrasing the question more specifically';
+            this.safeTerminalCall('warn', warningMsg);
           }
         }
       }
@@ -804,6 +1235,7 @@ export class StreamingToolOrchestrator {
       if (turnCount >= maxTurns) {
         logger.warn('Conversation reached maximum turn limit');
         this.safeTerminalCall('warn', 'Reached maximum conversation turns');
+        turnResult = { turnComplete: false, sessionShouldEnd: true, reason: 'max_turns' };
       }
 
       logger.info('🏁 Streaming tool execution completed', {
@@ -814,6 +1246,39 @@ export class StreamingToolOrchestrator {
         reason: turnCount >= maxTurns ? 'max_turns' : conversationComplete ? 'completed_naturally' : 'unknown'
       });
 
+      // CRITICAL FIX: Ensure output ends with newline before returning
+      // This fixes the issue where prompt doesn't appear after command output
+      // because the cursor is left in the middle of a line
+      // In E2E mode (pipes), isTTY is false, but we still need to write the newline
+      const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+      if (typeof process.stdout.write === 'function') {
+        try {
+          // Always add a newline to ensure prompt appears correctly (both TTY and E2E mode)
+          process.stdout.write('\n');
+        } catch (e) {
+          // Ignore errors - write may fail in some environments
+        }
+      }
+
+      // CRITICAL FIX: Flush stdout/stderr before returning to ensure all output is written
+      // This is especially important for E2E tests that need to detect the ready prompt
+      if (typeof process.stdout.write === 'function') {
+        // Force flush by writing empty string (if supported)
+        try {
+          process.stdout.write('');
+        } catch (e) {
+          // Ignore errors - flush may not be supported in all environments
+        }
+      }
+      if (typeof process.stderr.write === 'function') {
+        try {
+          process.stderr.write('');
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+
+      return turnResult;
     } catch (error) {
       const normalizedError = normalizeError(error);
       logger.error('executeWithStreamingAndHistory failed', normalizedError);
@@ -870,8 +1335,14 @@ export class StreamingToolOrchestrator {
 
     try {
       // Import the tool-calling system prompt
-      const { generateToolCallingSystemPrompt } = await import('../ai/prompts.js');
-      const systemPrompt = generateToolCallingSystemPrompt();
+      const { generateToolCallingSystemPrompt, enhanceSystemPromptWithPlanning } = await import('../ai/prompts.js');
+      let systemPrompt = generateToolCallingSystemPrompt();
+      
+      // Enhance prompt with planning suggestions if the request is complex
+      // Use the userPrompt directly since this method receives it as a parameter
+      if (userPrompt) {
+        systemPrompt = enhanceSystemPromptWithPlanning(systemPrompt, userPrompt);
+      }
 
       // Debug logging
       logger.debug('System prompt being sent:', {
@@ -1532,6 +2003,27 @@ export class StreamingToolOrchestrator {
       }
     }
 
+    // Plan approval: block execute unless plan was approved (when requirePlanApproval)
+    if (
+      toolName === 'planning' &&
+      parameters.operation === 'execute' &&
+      this.config.requirePlanApproval
+    ) {
+      const planId = parameters.planId as string | undefined;
+      if (planId && !this.approvedPlanIds.has(planId)) {
+        const errorResult = {
+          success: false,
+          error: 'Plan was not approved. Create a plan and approve it when prompted before executing.',
+          metadata: { executionTime: 0 },
+        };
+        this.addToolResult(callId, errorResult);
+        this.safeTerminalCall('warn', '✗ Plan execution skipped (plan not approved).');
+        return errorResult;
+      }
+      // Clear after use so same plan cannot be executed again without re-approval
+      if (planId) this.approvedPlanIds.delete(planId);
+    }
+
     // Show execution start - format differently for debug vs normal mode
     const debugMode = isDebugMode();
     if (debugMode) {
@@ -1575,10 +2067,53 @@ export class StreamingToolOrchestrator {
         )
       );
 
-      const result: ToolResult = await Promise.race([
+      let result: ToolResult = await Promise.race([
         tool.execute(parameters, context),
         timeoutPromise
       ]);
+
+      // Interactive plan approval: after planning "create" succeeds, optionally prompt
+      if (
+        toolName === 'planning' &&
+        parameters.operation === 'create' &&
+        result.success &&
+        result.data &&
+        this.config.requirePlanApproval
+      ) {
+        const planId = result.data.planId as string | undefined;
+        if (planId && shouldPromptForPlanApproval({ requirePlanApproval: true, nonInteractive: false })) {
+          const planLike = {
+            id: planId,
+            title: result.data.title,
+            description: result.data.description,
+            tasks: result.data.tasks ?? [],
+            dependencies: new Map((result.data.dependencies as [string, string[]][]) ?? []),
+            estimatedDuration: result.data.estimatedDuration ?? 0,
+            status: result.data.status ?? 'planning',
+            progress: result.data.progress ?? { completed: 0, total: 0, percentage: 0 },
+            created: new Date(),
+            metadata: result.data.metadata ?? { complexity: 'simple', confidence: 0, adaptations: 0 },
+            riskLevel: result.data.riskLevel ?? 'low',
+          };
+          const approved = await requestPlanApproval({
+            plan: planLike as import('../ai/task-planner.js').TaskPlan,
+            terminal: this.terminal,
+          });
+          if (!approved) {
+            result = {
+              success: true,
+              data: {
+                ...result.data,
+                executionDeclined: true,
+                message: 'Plan created. User declined execution. Say "execute" with this planId when ready, or ask to modify the plan.',
+              },
+              metadata: result.metadata,
+            };
+          } else {
+            this.approvedPlanIds.add(planId);
+          }
+        }
+      }
 
       const executionTime = Math.round((Date.now() - startTime) / 1000);
 

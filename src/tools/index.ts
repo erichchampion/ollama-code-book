@@ -16,6 +16,11 @@ export * from './execution.js';
 export * from './advanced-git-tool.js';
 export * from './advanced-code-analysis-tool.js';
 export * from './advanced-testing-tool.js';
+export * from './planning-tool.js';
+export * from './project-context-tool.js';
+export * from './dependency-analysis-tool.js';
+export * from './refactoring-tool.js';
+export * from './documentation-tool.js';
 
 import { ToolRegistry, toolRegistry } from './registry.js';
 import { FileSystemTool } from './filesystem.js';
@@ -24,6 +29,11 @@ import { ExecutionTool } from './execution.js';
 import { AdvancedGitTool } from './advanced-git-tool.js';
 import { AdvancedCodeAnalysisTool } from './advanced-code-analysis-tool.js';
 import { AdvancedTestingTool } from './advanced-testing-tool.js';
+import { PlanningTool } from './planning-tool.js';
+import { ProjectContextTool } from './project-context-tool.js';
+import { DependencyAnalysisTool } from './dependency-analysis-tool.js';
+import { RefactoringTool } from './refactoring-tool.js';
+import { DocumentationTool } from './documentation-tool.js';
 import { logger } from '../utils/logger.js';
 
 // Track if tool system has been initialized
@@ -49,6 +59,21 @@ export function initializeToolSystem(): void {
     toolRegistry.register(new AdvancedGitTool());
     toolRegistry.register(new AdvancedCodeAnalysisTool());
     toolRegistry.register(new AdvancedTestingTool());
+
+    // Register planning tool (lazy-loads TaskPlanner when needed)
+    toolRegistry.register(new PlanningTool());
+
+    // Register project context tool (lazy-loads ProjectContext when needed)
+    toolRegistry.register(new ProjectContextTool());
+
+    // Register dependency analysis tool (graph, circular, impact)
+    toolRegistry.register(new DependencyAnalysisTool());
+
+    // Register refactoring tool (rename, extract, inline)
+    toolRegistry.register(new RefactoringTool());
+
+    // Register documentation tool (readme, jsdoc, comments)
+    toolRegistry.register(new DocumentationTool());
 
     toolSystemInitialized = true;
     logger.info('Tool system initialized successfully');

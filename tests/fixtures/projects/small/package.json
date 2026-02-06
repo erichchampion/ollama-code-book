@@ -8,7 +8,20 @@
     "start": "node index.js",
     "test": "echo \"No tests yet\""
   },
-  "keywords": ["test", "fixture"],
+  "keywords": [
+    "test",
+    "fixture"
+  ],
   "author": "Test Author",
-  "license": "MIT"
+  "license": "MIT",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "mongoose": "^9.1.6"
+  }
 }

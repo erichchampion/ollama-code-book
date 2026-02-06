@@ -6,6 +6,7 @@
  */
 
 import { Message } from './types.js';
+import { shouldSuggestPlanning, detectComplexity } from '../tools/complexity-detection.js';
 
 // Define MessageRole consts since we're using the type as values
 const MESSAGE_ROLE = {
@@ -335,6 +336,22 @@ function getLanguageFromFilePath(filePath: string): string {
  */
 export const TOOL_CALLING_SYSTEM_PROMPT = `You are an AI coding assistant with access to tools. Your primary task is to help users CREATE, BUILD, and IMPLEMENT code based on their requirements.
 
+🚨 CRITICAL RULE: ALWAYS USE TOOLS FOR FILE/CODE QUERIES 🚨
+If a user asks about files, code, or project structure, you MUST use tools. DO NOT answer from memory or provide generic responses.
+
+MANDATORY TOOL USAGE EXAMPLES:
+- "What files are in this project?" → IMMEDIATELY call filesystem tool with operation='list', path='.'
+- "What files are here?" → IMMEDIATELY call filesystem tool with operation='list', path='.'
+- "List files" → IMMEDIATELY call filesystem tool with operation='list', path='.'
+- "What files are in the current directory?" → IMMEDIATELY call filesystem tool with operation='list', path='.'
+- "Show me the contents of X" → IMMEDIATELY call filesystem tool with operation='read', path='X'
+- "Read file X" → IMMEDIATELY call filesystem tool with operation='read', path='X'
+- "Search for X" → IMMEDIATELY call search tool with query='X'
+- "Find where X is defined" → IMMEDIATELY call search tool with query='X'
+- "Where is X used?" → IMMEDIATELY call search tool with query='X'
+
+DO NOT respond with text like "I can help you list files" or "Here are some files that might be in the project". Instead, IMMEDIATELY call the appropriate tool.
+
 CRITICAL: Understand User Intent
 - When users say "Build X" or "Create X" or "Implement X" → They want you to GENERATE and WRITE code
 - When users say "Analyze X" or "Review X" or "Explain X" → They want you to EXAMINE existing code
@@ -347,14 +364,19 @@ When NOT to Use Tools:
 - Simple greetings and conversational queries (e.g., "Hello", "Hi", "How are you?") → Respond directly without tools
 - General knowledge questions that don't require file operations (e.g., "What is JavaScript?", "Explain async/await") → Answer directly
 - Follow-up clarification questions (e.g., "What do you mean?", "Can you explain that?") → Respond directly
-- ONLY use tools when you need to: search/read code files, create/modify files, or analyze existing code
 
 Tool Usage Guidelines:
-- For INFORMATIONAL QUERIES (e.g., "How is X used?", "Where is Y defined?", "Find usage of Z"):
-  1. Use 'search' tool to find code, imports, and usage patterns
-  2. Search for the EXACT identifier/keyword (e.g., "firestore" not "firestore usage")
-  3. Default type is "content" which searches within files
-  4. Example: { query: "firestore" } to find all uses of firestore
+- For INFORMATIONAL QUERIES (e.g., "How is X used?", "Where is Y defined?", "Find usage of Z", "What files are in this project?", "Show me the contents of X", "Search for Y"):
+  **YOU MUST USE TOOLS** - Do not answer from memory, use the available tools to find the information
+  1. For file listing queries ("What files are here?", "List files", "What files are in this project?"):
+     → Use 'filesystem' tool with operation='list' and path='.'
+  2. For file reading queries ("Show me the contents of X", "Read file X"):
+     → Use 'filesystem' tool with operation='read' and path='X'
+  3. For search queries ("Search for X", "Find where Y is defined", "Where is Z used?"):
+     → Use 'search' tool to find code, imports, and usage patterns
+     → Search for the EXACT identifier/keyword (e.g., "firestore" not "firestore usage")
+     → Default type is "content" which searches within files
+     → Example: { query: "firestore" } to find all uses of firestore
 
 - For CODE CREATION/BUILDING tasks (e.g., "Build a REST API", "Create a user auth system", "Implement X"):
   1. Use 'filesystem' tool with operation='write' to create code files
@@ -424,4 +446,60 @@ export function generateToolPlanningPrompt(userRequest: string, availableTools: 
 Available tools: ${availableTools.join(', ')}
 
 Plan which tools to use and in what order to fulfill this request effectively.`;
+}
+
+/**
+ * Enhance system prompt with planning suggestions for complex tasks
+ * 
+ * @param basePrompt The base system prompt to enhance
+ * @param userRequest The user's request to analyze for complexity
+ * @returns Enhanced prompt with planning suggestions if the request is complex
+ */
+export function enhanceSystemPromptWithPlanning(
+  basePrompt: string,
+  userRequest?: string
+): string {
+  // Handle empty or undefined requests
+  if (!userRequest || userRequest.trim().length === 0) {
+    return basePrompt;
+  }
+
+  // Check if planning should be suggested
+  if (!shouldSuggestPlanning(userRequest)) {
+    return basePrompt;
+  }
+
+  const complexity = detectComplexity(userRequest);
+  
+  // Build planning suggestion section
+  const planningSection = `
+
+## Planning for Complex Tasks
+
+This request appears to be ${complexity.level} in complexity (confidence: ${(complexity.confidence * 100).toFixed(0)}%). 
+For complex, multi-step tasks, consider using the **planning tool** to break down the work into manageable steps.
+
+### When to Use Planning Tool:
+- Multi-file or multi-component tasks
+- Architecture or system design requests
+- Multi-phase workflows with dependencies
+- Large refactoring tasks
+- Tasks involving multiple tools or operations
+
+### Planning Tool Operations:
+- **create**: Create a detailed task plan breaking down the request into subtasks
+- **view**: View an existing plan and its current status
+- **update**: Modify an existing plan (add/remove tasks, update dependencies)
+- **execute**: Execute a plan, running tasks in the correct order
+- **status**: Check the status and progress of a plan
+
+### Recommended Workflow:
+1. Use the planning tool with operation='create' to generate a structured plan
+2. Review the plan (operation='view') to ensure it covers all requirements
+3. Execute the plan (operation='execute') to carry out the tasks systematically
+4. Monitor progress (operation='status') as needed
+
+If you decide to use planning, start by calling the planning tool with operation='create' and the user's request.`;
+
+  return basePrompt + planningSection;
 } 

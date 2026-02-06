@@ -7,6 +7,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
 
+  /* No global timeout so full E2E suite (e.g. interactive with real Ollama) can run to completion */
+  globalTimeout: 0,
+
   /* Run tests in files in parallel */
   fullyParallel: true,
 
@@ -42,10 +45,18 @@ export default defineConfig({
   },
 
   /* Configure projects for different test scenarios */
+  /* Run interactive E2E with: yarn test:e2e:interactive --workers=1 (Ollama must be running) */
   projects: [
+    {
+      name: 'interactive-e2e',
+      testMatch: /interactive\/.*\.e2e\.test\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 120000, // 120s per test; real Ollama tool-calling can take 60–90s per turn
+    },
     {
       name: 'cli-e2e',
       testMatch: /.*\.e2e\.test\.ts/,
+      testIgnore: /interactive\//,
       use: { ...devices['Desktop Chrome'] },
       timeout: 60000, // 60 seconds for CLI operations
     },

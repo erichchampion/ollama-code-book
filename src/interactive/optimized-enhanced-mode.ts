@@ -23,6 +23,7 @@ import { initializeToolSystem } from '../tools/index.js';
 import { initAI } from '../ai/index.js';
 import { EXIT_COMMANDS } from '../constants.js';
 import { TIMEOUT_CONFIG, getComponentTimeout } from './timeout-config.js';
+import type { SessionState } from './types.js';
 
 export interface OptimizedEnhancedModeOptions {
   autoApprove?: boolean;
@@ -55,6 +56,8 @@ export class OptimizedEnhancedMode {
   private nlRouter?: NaturalLanguageRouter;
   private conversationManager?: ConversationManager;
   private running = false;
+  /** Session state: ready (for input), processing, or ended. */
+  private sessionState: SessionState = 'ready';
   private options: Required<OptimizedEnhancedModeOptions>;
   private initializationResult?: any;
   private conversationHistory: any[] = []; // Track conversation for streaming tools (bounded)
@@ -96,6 +99,11 @@ export class OptimizedEnhancedMode {
     }
 
     this.setupEventHandlers(); // Restored with legacy factory
+  }
+
+  /** Get current session state (for tests). */
+  getSessionState(): SessionState {
+    return this.sessionState;
   }
 
   /**
@@ -276,6 +284,9 @@ export class OptimizedEnhancedMode {
       }
     }
 
+    if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+      process.stderr?.write(`[E2E] Main loop exited (running=${this.running}, sessionState=${this.sessionState})\n`);
+    }
     this.terminal?.info('Goodbye! 👋');
 
     // Exit the process to ensure cleanup
@@ -305,38 +316,49 @@ export class OptimizedEnhancedMode {
         timeout: this.getComponentTimeout('aiClient')
       });
 
-      // Create terminal adapter for streaming orchestrator
+      // In E2E mode, write orchestrator output to process.stdout/stderr so tests capture it
+      const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
       const terminalAdapter = {
         write: (text: string) => {
-          if (this.terminal && typeof this.terminal.write === 'function') {
+          if (e2eMode) {
+            process.stdout.write(text);
+          } else if (this.terminal && typeof this.terminal.write === 'function') {
             this.terminal.write(text);
           } else {
             process.stdout.write(text);
           }
         },
         info: (text: string) => {
-          if (this.terminal && typeof this.terminal.info === 'function') {
+          if (e2eMode) {
+            process.stdout.write(text);
+          } else if (this.terminal && typeof this.terminal.info === 'function') {
             this.terminal.info(text);
           } else {
             console.log(`INFO: ${text}`);
           }
         },
         success: (text: string) => {
-          if (this.terminal && typeof this.terminal.success === 'function') {
+          if (e2eMode) {
+            process.stdout.write(text);
+          } else if (this.terminal && typeof this.terminal.success === 'function') {
             this.terminal.success(text);
           } else {
             console.log(`SUCCESS: ${text}`);
           }
         },
         warn: (text: string) => {
-          if (this.terminal && typeof this.terminal.warn === 'function') {
+          if (e2eMode) {
+            process.stderr.write(text);
+          } else if (this.terminal && typeof this.terminal.warn === 'function') {
             this.terminal.warn(text);
           } else {
             console.warn(`WARN: ${text}`);
           }
         },
         error: (text: string) => {
-          if (this.terminal && typeof this.terminal.error === 'function') {
+          if (e2eMode) {
+            process.stderr.write(text);
+          } else if (this.terminal && typeof this.terminal.error === 'function') {
             this.terminal.error(text);
           } else {
             console.error(`ERROR: ${text}`);
@@ -361,8 +383,8 @@ export class OptimizedEnhancedMode {
       // Add user message to conversation history (with bounds checking)
       this.addToConversationHistory({ role: 'user', content: userInput });
 
-      // Execute with streaming tools, passing conversation history
-      await this.streamingOrchestrator.executeWithStreamingAndHistory(
+      this.sessionState = 'processing';
+      const turnResult = await this.streamingOrchestrator.executeWithStreamingAndHistory(
         this.conversationHistory,
         {
           projectRoot: process.cwd(),
@@ -372,6 +394,52 @@ export class OptimizedEnhancedMode {
         }
       );
 
+      if (turnResult.turnComplete) {
+        this.sessionState = 'ready';
+        
+        // CRITICAL FIX: Ensure output ends with newline before showing prompt
+        // This fixes the issue where prompt doesn't appear after command output
+        // In E2E mode (pipes), isTTY is false, but we still need to write the newline
+        const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+        
+        // In E2E mode, explicitly show the prompt to signal ready state
+        // This is critical for test detection
+        if (e2eMode) {
+          // CRITICAL: Write newline + prompt together in a single write operation
+          // This ensures they appear in the same chunk for test detection
+          // The newline before the prompt ensures it's on a fresh line
+          process.stdout.write('\n> ');
+          
+          // CRITICAL: Force a flush by writing an empty string after a small delay
+          // This helps ensure the prompt is visible to the test helper even in buffered pipe mode
+          await new Promise(resolve => setTimeout(resolve, 50));
+          try {
+            // Write empty string to potentially trigger flush
+            process.stdout.write('');
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          // Additional delay to allow stdout buffer to flush
+          // In pipe mode (E2E), stdout is fully buffered, so we need to wait
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } else {
+          // TTY mode: ensure newline before prompt
+          process.stdout.write('\n');
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      } else if (turnResult.sessionShouldEnd) {
+        if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+          logger.warn('[E2E] Session ending: orchestrator returned sessionShouldEnd', { reason: turnResult.reason });
+          process.stderr?.write(`[E2E] Session ending: ${turnResult.reason ?? 'unknown'}\n`);
+        }
+        this.sessionState = 'ended';
+        this.running = false;
+        if (turnResult.reason) {
+          this.terminal?.warn(`Session ending: ${turnResult.reason}`);
+        }
+      }
+
     } catch (error) {
       logger.error('Streaming tools execution failed:', error);
       this.terminal.error(`Error: ${normalizeError(error).message}`);
@@ -379,6 +447,19 @@ export class OptimizedEnhancedMode {
       // Fallback to traditional routing
       this.terminal.info('Falling back to traditional processing...');
       await this.processUserInputOptimized(userInput);
+      this.sessionState = 'ready';
+      
+      // CRITICAL FIX: Ensure output ends with newline before showing prompt
+      if (process.stdout.isTTY) {
+        process.stdout.write('\n');
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      // In E2E mode, explicitly show the prompt
+      const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+      if (e2eMode) {
+        process.stdout.write('> ');
+      }
     }
   }
 
@@ -1120,6 +1201,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
     if (!this.terminal.isInteractive && !allowNonTTY) {
       // Non-interactive mode - return empty to exit gracefully
       logger.warn('Terminal is not interactive, exiting gracefully');
+      this.sessionState = 'ended';
       this.running = false;
       return '';
     }
@@ -1144,6 +1226,16 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
 
     try {
       logger.debug(`Starting input prompt with ${TIMEOUT_CONFIG.USER_INPUT}ms timeout`);
+
+      // CRITICAL FIX: Ensure output ends with newline and stdout is flushed before showing prompt
+      // This fixes the issue where prompt doesn't appear after command output
+      if (process.stdout.isTTY) {
+        // Check if cursor is not at start of line (output didn't end with newline)
+        // Force a newline to ensure prompt appears on a fresh line
+        process.stdout.write('\n');
+        // Small delay to ensure stdout is flushed
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
 
       const readline = await import('readline');
 
@@ -1254,6 +1346,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
       if (result === null) {
         logger.warn('Input timeout detected');
         this.terminal.warn('Input timeout - exiting...');
+        this.sessionState = 'ended';
         this.running = false;
         return '';
       }
@@ -1301,6 +1394,10 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
     // Handle stdin close (EOF)
     this.e2eReadline.on('close', () => {
       logger.debug('[E2E] stdin closed (EOF)');
+      // In E2E, log to stderr so test output captures why process exited
+      if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+        process.stderr?.write('[E2E] readline "close" received (stdin EOF or stream closed)\n');
+      }
       this.e2eStdinClosed = true;
 
       // If we have a pending promise waiting for input, resolve it with empty string
@@ -1331,12 +1428,21 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
 
     // Check if stdin is already closed
     if (this.e2eStdinClosed) {
+      if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+        process.stderr?.write('[E2E] Exiting: e2eStdinClosed was true (stdin had closed earlier)\n');
+      }
       logger.info('[E2E] stdin closed, exiting gracefully');
+      this.sessionState = 'ended';
       this.running = false;
       return '';
     }
 
     // Show prompt to signal ready state (for E2E test detection)
+    // CRITICAL: Ensure we're on a new line before writing prompt
+    // The prompt from processWithStreamingTools() might have already been written,
+    // but we write it again here to ensure it's visible when getUserInputFromE2E() is called
+    // This ensures the prompt is definitely present when we're waiting for input
+    // Write prompt with newline to ensure it's on its own line and triggers flush
     process.stdout.write('> ');
 
     // Create a new promise to wait for the next line
@@ -1354,7 +1460,11 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
       process.stdout.write(line + '\n');
       logger.debug(`[E2E] Returning input: ${line.substring(0, 50)}...`);
     } else {
+      if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+        process.stderr?.write('[E2E] Exiting: getUserInputFromE2E returned empty line (EOF)\n');
+      }
       logger.info('[E2E] EOF reached, exiting gracefully');
+      this.sessionState = 'ended';
       this.running = false;
     }
 
@@ -1368,6 +1478,10 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
     const command = input.toLowerCase().trim();
 
     if ((EXIT_COMMANDS as readonly string[]).includes(command)) {
+      if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+        process.stderr?.write(`[E2E] Exiting: user sent exit command "${command}"\n`);
+      }
+      this.sessionState = 'ended';
       this.running = false;
       return true;
     }
@@ -1487,6 +1601,18 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
     }
 
     this.terminal.info('\nType /help for more commands, or just ask me anything!\n');
+    
+    // CRITICAL FIX: Ensure welcome message ends with newline and stdout is flushed
+    // This fixes the issue where prompt doesn't appear when first launched
+    // The newline is already added above, but we ensure stdout is ready
+    if (process.stdout.isTTY && typeof process.stdout.write === 'function') {
+      try {
+        // Force a flush by writing empty string
+        process.stdout.write('');
+      } catch (e) {
+        // Ignore errors - flush may not be supported in all environments
+      }
+    }
   }
 
   /**
@@ -1562,9 +1688,13 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
 
     // Check if terminal is available for user interaction
     if (!this.terminal) {
+      if (process.env.OLLAMA_CODE_E2E_TEST === 'true') {
+        process.stderr?.write('[E2E] Exiting: terminal unavailable after error\n');
+      }
       logger.error('Error occurred but terminal unavailable for user prompt:', formattedError);
       logger.error('Stopping execution due to error without user confirmation');
       // Safe default: stop execution when we can't ask the user
+      this.sessionState = 'ended';
       this.running = false;
       return;
     }
@@ -1587,6 +1717,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
       });
 
       if (!shouldContinue?.continue) {
+        this.sessionState = 'ended';
         this.running = false;
       }
     } catch (promptError) {
@@ -1614,6 +1745,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
       try {
         const input = await this.getUserInput();
         if (!input || (EXIT_COMMANDS as readonly string[]).includes(input.toLowerCase().trim())) {
+          this.sessionState = 'ended';
           this.running = false;
           break;
         }
@@ -1633,6 +1765,7 @@ Reply with ONLY the file path, nothing else. Example: src/components/LoginForm.j
   private async cleanup(): Promise<void> {
     logger.debug('Cleaning up optimized enhanced mode');
 
+    this.sessionState = 'ended';
     this.running = false;
     this.performanceMonitor.stopMonitoring();
     this.statusTracker.stopHealthChecks();

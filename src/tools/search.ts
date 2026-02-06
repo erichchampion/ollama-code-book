@@ -38,14 +38,14 @@ interface SearchResult {
 export class SearchTool extends BaseTool {
   metadata: ToolMetadata = {
     name: 'search',
-    description: 'Search for text WITHIN FILE CONTENTS (NOT for checking if files exist). By default searches file contents to find code, imports, and usage patterns. Use type="filename" only when looking for files by name. To check if a specific file exists, use the filesystem tool with operation="exists" instead.',
+    description: 'CRITICAL: Use this tool when user asks to "Search for X", "Find where X is defined", "Where is X used?", "Find X in the code", or similar search queries. Searches WITHIN FILE CONTENTS by default to find code, imports, and usage patterns. Use type="filename" only when looking for files by name. To check if a specific file exists, use filesystem tool with operation="exists". To list files, use filesystem tool with operation="list". Examples: "Search for add" → {query:"add"}, "Find where firestore is used" → {query:"firestore"}, "Where is useState defined?" → {query:"useState"}.',
     category: 'core',
     version: '1.0.0',
     parameters: [
       {
         name: 'query',
         type: 'string',
-        description: 'IMPORTANT: Use ONLY the exact identifier/keyword as it appears in code. DO NOT add words like "usage", "import", "function", etc. CORRECT: "firestore", "useState", "express". INCORRECT: "firestore usage", "how useState works", "express server". Just the bare keyword.',
+        description: 'CRITICAL: The exact identifier/keyword to search for as it appears in code. Use ONLY the bare keyword - DO NOT add words like "usage", "import", "function", etc. CORRECT examples: "add", "firestore", "useState", "express". INCORRECT: "add function", "firestore usage", "how useState works", "express server". When user says "Search for the word add" or "Find where add is defined", use query="add" (just the keyword).',
         required: true
       },
       {

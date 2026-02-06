@@ -68,6 +68,8 @@ Why qwen2.5-coder?
 yarn test:e2e:interactive
 ```
 
+The script runs with `--workers=1` so tool-calling tests (real Ollama) don't contend. The full suite (26 tests) may take 15–30+ minutes. Ensure Ollama is running and the model is available; otherwise some tests may fail with "Essential component ai-system failed" (CI should retry).
+
 ### Run with debug output
 
 ```bash

@@ -17,6 +17,8 @@ export const TEST_TIMEOUTS = {
   DEFAULT_WAIT_INTERVAL: 100,
   /** Extended timeout for analysis commands */
   ANALYSIS_TIMEOUT: 60000,
+  /** Timeout for one interactive turn (waitForReady / completion); use for duration assertions */
+  INTERACTIVE_TURN_TIMEOUT: 150000,
 } as const;
 
 /**

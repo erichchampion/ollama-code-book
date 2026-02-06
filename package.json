@@ -36,7 +36,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:interactive": "playwright test tests/e2e/interactive",
+    "test:e2e:interactive": "playwright test tests/e2e/interactive --workers=1",
     "test:e2e:interactive:debug": "playwright test tests/e2e/interactive --debug",
     "test:e2e:interactive:headed": "playwright test tests/e2e/interactive --headed",
     "playwright": "playwright",

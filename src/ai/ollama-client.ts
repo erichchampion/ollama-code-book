@@ -411,6 +411,20 @@ export class OllamaClient {
 
           // Handle tool calls
           if (event.message?.tool_calls) {
+            const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+            const toolNames = event.message.tool_calls.map((tc: any) => tc.function?.name || 'unknown');
+            
+            logger.debug('Tool calls detected in stream event', {
+              toolCallCount: event.message.tool_calls.length,
+              toolNames
+            });
+            
+            // CRITICAL DEBUG: In E2E mode, always log when tool calls are detected at API level
+            if (e2eMode) {
+              // Use console.error to ensure it goes to stderr and is captured by tests
+              console.error(`[DEBUG E2E] API level: Tool calls detected: ${toolNames.join(', ')}\n`);
+            }
+            
             for (const toolCall of event.message.tool_calls) {
               const callId = toolCall.id || `${toolCall.function.name}-${Date.now()}`;
 
@@ -438,6 +452,14 @@ export class OllamaClient {
                 }
               }
             }
+          }
+          
+          // DEBUG: Log when stream completes with no tool calls but tools were available
+          if (event.done && pendingToolCalls.size === 0 && request.tools && request.tools.length > 0) {
+            logger.debug('Stream completed with no tool calls', {
+              toolsAvailable: request.tools.length,
+              toolNames: request.tools.map((t: any) => t.function?.name || 'unknown').slice(0, 5)
+            });
           }
 
           // Handle completion
@@ -602,7 +624,16 @@ export class OllamaClient {
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
+      const e2eMode = process.env.OLLAMA_CODE_E2E_TEST === 'true';
+      if (e2eMode) {
+        console.error(`[DEBUG E2E] About to fetch: ${url}\n`);
+      }
+      
       const response = await fetch(url, options);
+
+      if (e2eMode) {
+        console.error(`[DEBUG E2E] Fetch completed - Status: ${response.status}, OK: ${response.ok}\n`);
+      }
 
       if (!response.ok) {
         await this.handleErrorResponse(response);
@@ -612,10 +643,15 @@ export class OllamaClient {
         throw new Error('Response body is null');
       }
 
+      if (e2eMode) {
+        console.error(`[DEBUG E2E] Response body exists, getting reader...\n`);
+      }
+
       // Get reader - if this fails, it will be caught by outer try-catch
       reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let chunkCount = 0;
 
       try {
         while (true) {
@@ -631,8 +667,16 @@ export class OllamaClient {
           }
 
           const { done, value } = await reader.read();
+          
+          if (e2eMode) {
+            chunkCount++;
+            console.error(`[DEBUG E2E] Read chunk #${chunkCount} - done: ${done}, value length: ${value?.length || 0}\n`);
+          }
 
           if (done) {
+            if (e2eMode) {
+              console.error(`[DEBUG E2E] Stream done after ${chunkCount} chunks\n`);
+            }
             break;
           }
 

@@ -111,6 +111,82 @@ describe('StreamingToolOrchestrator', () => {
     expect(source).toMatch(/fix or apply these issues/);
     expect(source).toMatch(/operation='write' to apply the changes/);
   });
+
+  it('should return TurnResult { turnComplete: true } for text-only reply (no tools)', async () => {
+    const mockOllamaClient = {
+      completeStreamWithTools: jest.fn().mockImplementation((_history, _tools, _opts, callbacks) => {
+        if (callbacks.onContent) callbacks.onContent('Hello, how can I help?');
+        return Promise.resolve();
+      })
+    };
+    const toolRegistry = new ToolRegistry();
+    const mockTerminal = {
+      write: jest.fn(),
+      info: jest.fn(),
+      success: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn()
+    };
+    const orchestrator = new StreamingToolOrchestrator(
+      mockOllamaClient,
+      toolRegistry,
+      mockTerminal
+    );
+    const history = [{ role: 'user', content: 'Hi' }];
+    const context = { projectRoot: process.cwd(), workingDirectory: process.cwd(), environment: {}, timeout: 60000 };
+    const result = await orchestrator.executeWithStreamingAndHistory(history, context);
+    expect(result).toEqual({ turnComplete: true });
+  });
+
+  it('should return sessionShouldEnd: true after max consecutive tool failures', async () => {
+    const typesModule = await import('../../../dist/src/tools/types.js');
+    class AlwaysFailsTool extends typesModule.BaseTool {
+      metadata = {
+        name: 'AlwaysFailsTool',
+        description: 'Tool that always fails (for tests)',
+        category: 'test',
+        version: '1',
+        parameters: [],
+        examples: []
+      };
+      async execute() {
+        return { success: false, error: 'fail' };
+      }
+    }
+    const toolRegistry = new ToolRegistry();
+    toolRegistry.register(new AlwaysFailsTool());
+
+    let turnCount = 0;
+    const mockOllamaClient = {
+      completeStreamWithTools: jest.fn().mockImplementation(async (_history, _tools, _opts, callbacks) => {
+        turnCount++;
+        if (callbacks.onToolCall) {
+          await callbacks.onToolCall({
+            id: `call-${turnCount}`,
+            function: { name: 'AlwaysFailsTool', arguments: {} }
+          });
+        }
+      })
+    };
+    const mockTerminal = {
+      write: jest.fn(),
+      info: jest.fn(),
+      success: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn()
+    };
+    const orchestrator = new StreamingToolOrchestrator(
+      mockOllamaClient,
+      toolRegistry,
+      mockTerminal
+    );
+    const history = [{ role: 'user', content: 'Do something' }];
+    const context = { projectRoot: process.cwd(), workingDirectory: process.cwd(), environment: {}, timeout: 60000 };
+    const result = await orchestrator.executeWithStreamingAndHistory(history, context);
+    expect(result.turnComplete).toBe(false);
+    expect(result.sessionShouldEnd).toBe(true);
+    expect(result.reason).toBe('consecutive_failures');
+  });
 });
 
 describe('OllamaToolAdapter', () => {
